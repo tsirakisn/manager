@@ -129,6 +129,7 @@ implementationFor xm uuid = self where
   , comCitrixXenclientXenmgrVmDeleteNetFirewallRule = _delete_firewall_rule uuid
   -- bucketload of properties - unrestricted version
   ---------------------------
+  , comCitrixXenclientXenmgrVmUnrestrictedGetBlah = runvm _state_str
   , comCitrixXenclientXenmgrVmUnrestrictedGetState = runvm _state_str
   , comCitrixXenclientXenmgrVmUnrestrictedGetAcpiState = fromIntegral <$> getVmAcpiState uuid
   , comCitrixXenclientXenmgrVmUnrestrictedGetDomid = fromIntegral . fromMaybe (-1) <$> getDomainID uuid
@@ -320,6 +321,7 @@ implementationFor xm uuid = self where
 
     -- bucketload of properties -- restricted version
     -------------------------------------------------
+  , comCitrixXenclientXenmgrVmGetBlah = runvm _state_str
   , comCitrixXenclientXenmgrVmGetState = runvm _state_str
   , comCitrixXenclientXenmgrVmGetAcpiState = fromIntegral <$> getVmAcpiState uuid
   , comCitrixXenclientXenmgrVmGetDomid = fromIntegral . fromMaybe (-1) <$> getDomainID uuid
