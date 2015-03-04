@@ -84,6 +84,7 @@ cdDeviceStickyNode :: BSGDevice -> String
 cdDeviceStickyNode (BSGDevice a b c d) =
     printf "/xenmgr/cdassign/%s" (printf "%d_%d_%d_%d" a b c d :: String)
 
+--Query xenstore for the lock status of a cd Device for the specified domid.
 getCdDeviceLockStatus :: DomainID -> BSGDevice -> IO Bool
 getCdDeviceLockStatus domid dev = from <$> xsRead (cdDeviceXsNode domid dev ++ "/lock") where
   from (Just "1") = True
@@ -108,6 +109,7 @@ updateCdDeviceMediaStatusKey dev =
       v' <- xsRead path
       when (Just v /= v') $ xsWrite path v
 
+--Return a list of domids that have a lock on the cd device
 getCdDeviceDomains :: BSGDevice -> Rpc [DomainID]
 getCdDeviceDomains dev = filterM lockedBy =<< getDomains where
   getDomains = catMaybes <$> (mapM getDomainID =<< getVms)
@@ -119,7 +121,9 @@ getCdDeviceVms dev = do
   running  <- catMaybes <$> (mapM getDomainUuid =<< getCdDeviceDomains dev)
   stickies <- getVmsBy (isStickyTo dev)
   return $ map (\vm -> (vm, vm `elem` stickies)) (running ++ stickies)
-  
+ 
+--Helper function for unassignCdDevice. When the cd device is assigned
+--to the domain, request it to be removed from the domain.
 unassignCdDevice' :: BSGDevice -> DomainID -> IO ()
 unassignCdDevice' dev domid = do
   assigned <- getCdDeviceLockStatus domid dev
@@ -132,6 +136,8 @@ unassignCdDevice' dev domid = do
 unassignCdDevice :: BSGDevice -> Rpc ()
 unassignCdDevice dev = mapM_ (liftIO . unassignCdDevice' dev) =<< getCdDeviceDomains dev
 
+--When the cd is not assigned to the domain, enter a request
+--for it to be assigned.
 assignCdDevice :: BSGDevice -> Uuid -> Rpc ()
 assignCdDevice dev@(BSGDevice a b c d) uuid = withDomain =<< getDomainID uuid where
   withDomain Nothing = return ()
@@ -141,6 +147,8 @@ assignCdDevice dev@(BSGDevice a b c d) uuid = withDomain =<< getDomainID uuid wh
       info $ "assigning CD device " ++ (printf "%d:%d:%d:%d" a b c d) ++ " to vm " ++ show uuid
       let assignnode = cdDeviceXsReqNode domid dev ++ "/req-assign"
       xsWrite assignnode "1"
+      let assignuuid = ("/atapi-pt-status/" ++ (printf "%d_%d_%d_%d" a b c d) ++ "/assigned_uuid")
+      xsWrite assignuuid (show uuid)
       r <- xsWaitForNodeToDisappear requestTimeout assignnode
       when (not r) $ error "assign of CD device failed"
 

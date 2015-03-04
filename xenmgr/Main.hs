@@ -38,6 +38,7 @@ import System.Timeout (timeout)
 import System.Process
 import System.FilePath
 import Directory
+import Text.Printf
 
 import qualified Tools.Periodic as Periodic
 import Tools.Periodic
@@ -336,6 +337,15 @@ rmSnapshots = mapM_ rm =<< return . filter isSnapshot =<< filesInDir "/storage/d
   isSnapshot p = any (== True) . map (flip isSuffixOf p) $ [".snap", ".snap.tmp.vhd"]
   rm p = info ("removing snapshot " ++ p) >> removeLink p
 
+--Initialize a key in xenstore per device and set permissions read/write for dom0.
+initXsEntries :: IO ()
+initXsEntries = mapM_ (writexs) =<< devs where
+    devs = mapM (\d -> id <$> pure d) =<< liftIO getHostBSGDevices 
+    writexs (BSGDevice a b c d) = liftIO $ do
+      xsWrite ("/atapi-pt-status/" ++ (printf "%d_%d_%d_%d" a b c d) ++ "/assigned_uuid") "0"
+      xsSetPermissions ("/atapi-pt-status/" ++ (printf "%d_%d_%d_%d" a b c d) ++ "/assigned_uuid") [Permission 0 [PermRead,PermWrite]]
+      info ("Wrote atapi status for device" ++ (printf "%d_%d_%d_%d" a b c d)) 
+
 initXenMgr opts = do
   -- show info about corrupted configs
   -- detectVmsConfigProblems
@@ -384,6 +394,8 @@ initXenMgr opts = do
       xsWrite "/xenclient/bsgdev" ""
       xsChmod "/xenclient/bsgdev" "b0"
 
+    liftIO $ do
+      initXsEntries
     -- Find the vms requiring autostart (unless disabled by command line). Includes vms to dehibernate
     when (not $ NoAutostart `elem` opts) $
       setupAutoStart
