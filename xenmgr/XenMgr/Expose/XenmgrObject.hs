@@ -188,7 +188,7 @@ implementation xm testingCtx =
   , comCitrixXenclientXenmgrTestingScriptDequeue = liftIO $ testingDequeueScript testingCtx
   , comCitrixXenclientXenmgrUnrestrictedUnrestrictedCreateVm = _CreateVm True xm defaultCreateVmPms
   , comCitrixXenclientXenmgrUnrestrictedUnrestrictedCreateVmWithTemplateAndJson = \template json -> _CreateVm True xm (defaultCreateVmPms { cvmTemplate = Just template, cvmExtraJson = json })
-  , comCitrixXenclientXenmgrUnrestrictedUnrestrictedDeleteVm = \uuid -> removeVm (fromString uuid)
+  , comCitrixXenclientXenmgrUnrestrictedUnrestrictedDeleteVm = \uuid -> _RemoveVm (fromString uuid)
                                                                         
   , comCitrixXenclientXenmgrGuestreqRequestAttention = guestRequestAttention
   }
@@ -237,6 +237,12 @@ _CreateVm unrestricted xm pms =
 
 _CreateVhd :: Int32 -> Rpc String
 _CreateVhd sizeMB = liftIO $ createVhd (fromIntegral sizeMB)
+
+_RemoveVm :: Uuid -> Rpc ()
+_RemoveVm uuid = 
+    do removeVm uuid
+       liftRpc $ XenMgr.Expose.VmObject.hide uuid
+       notifyVmDeleted uuid
 
 _ListChildServiceVmTemplates :: Rpc [String]
 _ListChildServiceVmTemplates = liftIO enumChildServiceVmTags
