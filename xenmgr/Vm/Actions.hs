@@ -447,6 +447,7 @@ removeVm uuid =
        -- FIXME: cleanly stop monitoring events
        removeDefaultEvents uuid	--cleanly...stop monitoring events
        Xenvm.quitXenvm uuid
+       liftRpc $ XenMgr.Expose.VmObject.hide uuid
        notifyVmDeleted uuid
   where
     removeVhds  = Data.Foldable.mapM_ (removeDiskFiles uuid) =<< getDisks uuid

@@ -16,7 +16,7 @@
 -- Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 --
 
-module XenMgr.Expose.VmObject (expose) where
+module XenMgr.Expose.VmObject (expose, hide) where
 
 import Control.Monad
 import Control.Applicative
@@ -76,6 +76,12 @@ expose uuid =
 
        nic_ids <- sort <$> liftRpc (getNicIds uuid)
        mapM_ (VmNicObj.expose uuid) nic_ids
+
+hide :: Uuid -> Rpc ()
+hide uuid = do
+    let path = vmObjPath uuid
+    info $ "unexposing VM" ++ (show path)
+    rpcHide path
 
 -- just some utility used below to convert function working on Uuids into function working on string
 -- (as uuids get passed as strings through rpc calls)
