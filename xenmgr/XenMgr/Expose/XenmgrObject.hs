@@ -188,8 +188,7 @@ implementation xm testingCtx =
   , comCitrixXenclientXenmgrTestingScriptDequeue = liftIO $ testingDequeueScript testingCtx
   , comCitrixXenclientXenmgrUnrestrictedUnrestrictedCreateVm = _CreateVm True xm defaultCreateVmPms
   , comCitrixXenclientXenmgrUnrestrictedUnrestrictedCreateVmWithTemplateAndJson = \template json -> _CreateVm True xm (defaultCreateVmPms { cvmTemplate = Just template, cvmExtraJson = json })
-  , comCitrixXenclientXenmgrUnrestrictedUnrestrictedDeleteVm = \uuid -> removeVm (fromString uuid)
-                                                                        
+  , comCitrixXenclientXenmgrUnrestrictedUnrestrictedDeleteVm = \uuid -> _RemoveVm (fromString uuid)
   , comCitrixXenclientXenmgrGuestreqRequestAttention = guestRequestAttention
   }
 
