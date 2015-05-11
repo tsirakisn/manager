@@ -486,7 +486,7 @@ startVm uuid = do
 --to match on domain and bus.  
 stripPositional :: Eq a => a -> [a] -> [a]
 stripPositional 0 [] = []
-stripPositional pos (x:xs) =
+stripPositional pos (x:xs)
     | pos == 0  = []
     | otherwise = x : stripPositional (pos-1) xs
 
