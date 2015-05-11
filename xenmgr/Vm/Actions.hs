@@ -482,13 +482,13 @@ startVm uuid = do
     ran <- liftRpc $ runEventScript HardFail uuid getVmRunInsteadofStart [uuidStr uuid]
     when (not ran) $ startVmInternal uuid
 
---Remove the function from the bdf so we can match on just the domain, bus, and device
-stripBdf :: Eq a => a -> [a] -> [a]
-stripBdf _ [] = []
-stripBdf delim (x:xs) =
-    if x == delim
-    then []
-    else x : stripBdf delim xs
+--Generic positional strip (from tail) function so we can remove the device/function from the bdf
+--to match on domain and bus.  
+stripPositional :: Eq a => a -> [a] -> [a]
+stripPositional 0 [] = []
+stripPositional pos (x:xs) =
+    | pos == 0  = []
+    | otherwise = x : stripPositional (pos-1) xs
 
 --Add a passthrough rule to vm config
 add_pt_rule_bdf uuid dev = modifyVmPciPtRules uuid $ pciAddRule (form_rule_bdf (show (devAddr dev)))
@@ -516,19 +516,23 @@ startVmInternal uuid = do
         then do
           gfxbdf <- getVmGpu uuid
           devices <- liftIO pciGetDevices
-          let devMatches = filter (bdFilter (stripBdf '.' gfxbdf)) devices in
+          let devMatches = filter (bdFilter (stripBdf 7 gfxbdf)) devices in
               foldl1 seq (map (add_pt_rule_bdf uuid) devMatches)
         else return ()
 
     --Filter function to match on domain:bus:device
     bdFilter match d = isInfixOf match (show (devAddr d))
 
-    --Check if vm has a bdf in gpu
-    isGpuPt uuid = do
+    isGpuPt uuid = do 
         gpu <- getVmGpu uuid
-        if (gpu == "" || gpu == "hdx")
-            then return False
-            else return True
+        return (gpu != "" && gpu != "hdx")
+
+    --Check if vm has a bdf in gpu
+    --isGpuPt uuid = do
+    --    gpu <- getVmGpu uuid
+    --    if (gpu == "" || gpu == "hdx")
+    --        then return False
+    --        else return True
 
     prepareAndCheckConfig uuid = do
       ok <- stage1 -- early tests / dependency startup
