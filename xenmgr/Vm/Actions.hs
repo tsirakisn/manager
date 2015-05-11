@@ -516,7 +516,7 @@ startVmInternal uuid = do
         then do
           gfxbdf <- getVmGpu uuid
           devices <- liftIO pciGetDevices
-          let devMatches = filter (bdFilter (stripBdf 7 gfxbdf)) devices in
+          let devMatches = filter (bdFilter (stripPositional 7 gfxbdf)) devices in
               foldl1 seq (map (add_pt_rule_bdf uuid) devMatches)
         else return ()
 
@@ -525,7 +525,7 @@ startVmInternal uuid = do
 
     isGpuPt uuid = do 
         gpu <- getVmGpu uuid
-        return (gpu != "" && gpu != "hdx")
+        return (gpu /= "" && gpu /= "hdx")
 
     --Check if vm has a bdf in gpu
     --isGpuPt uuid = do
