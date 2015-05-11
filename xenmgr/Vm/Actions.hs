@@ -484,8 +484,7 @@ startVm uuid = do
 
 --Generic positional strip (from tail) function so we can remove the device/function from the bdf
 --to match on domain and bus.  
-stripPositional :: Eq a => a -> [a] -> [a]
-stripPositional 0 [] = []
+stripPositional _ [] = []
 stripPositional pos (x:xs)
     | pos == 0  = []
     | otherwise = x : stripPositional (pos-1) xs
@@ -523,16 +522,10 @@ startVmInternal uuid = do
     --Filter function to match on domain:bus:device
     bdFilter match d = isInfixOf match (show (devAddr d))
 
+    --Check if vm has a bdf in gpu
     isGpuPt uuid = do 
         gpu <- getVmGpu uuid
         return (gpu /= "" && gpu /= "hdx")
-
-    --Check if vm has a bdf in gpu
-    --isGpuPt uuid = do
-    --    gpu <- getVmGpu uuid
-    --    if (gpu == "" || gpu == "hdx")
-    --        then return False
-    --        else return True
 
     prepareAndCheckConfig uuid = do
       ok <- stage1 -- early tests / dependency startup
