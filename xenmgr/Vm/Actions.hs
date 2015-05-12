@@ -1560,6 +1560,7 @@ setVmGpu uuid s = do
       "hdx" -> test_hdx
       _ -> return ()
     saveConfigProperty uuid vmGpu s
+    info $ "Invoked setVmGpu." 
     where
       set_hdx uuid cfgs = map set cfgs
           where set (uuid',c) | uuid == uuid' = (uuid', c { vmcfgGraphics = HDX })
