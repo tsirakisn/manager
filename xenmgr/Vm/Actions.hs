@@ -482,13 +482,6 @@ startVm uuid = do
     ran <- liftRpc $ runEventScript HardFail uuid getVmRunInsteadofStart [uuidStr uuid]
     when (not ran) $ startVmInternal uuid
 
---Generic positional strip (from tail) function so we can remove the device/function from the bdf
---to match on domain and bus.  
-stripPositional _ [] = []
-stripPositional pos (x:xs)
-    | pos == 0  = []
-    | otherwise = x : stripPositional (pos-1) xs
-
 --Add a passthrough rule to vm config
 add_pt_rule_bdf uuid dev = modifyVmPciPtRules uuid $ pciAddRule (form_rule_bdf (show (devAddr dev)))
 
@@ -515,7 +508,7 @@ startVmInternal uuid = do
         then do
           gfxbdf <- getVmGpu uuid
           devices <- liftIO pciGetDevices
-          let devMatches = filter (bdFilter (stripPositional 7 gfxbdf)) devices in
+          let devMatches = filter (bdFilter (take 7 gfxbdf)) devices in
               foldl1 seq (map (add_pt_rule_bdf uuid) devMatches)
         else return ()
 
@@ -523,7 +516,7 @@ startVmInternal uuid = do
     bdFilter match d = isInfixOf match (show (devAddr d))
 
     --Check if vm has a bdf in gpu
-    isGpuPt uuid = do 
+    isGpuPt uuid = do
         gpu <- getVmGpu uuid
         return (gpu /= "" && gpu /= "hdx")
 
