@@ -411,11 +411,11 @@ getVmSeamlessMouseX uuid gpusNextTo =
          =<< return . concat
          =<< mapM with_gpu adjacent_gpus
     where
-      gpu_id "" = "hdx"
+      gpu_id "" = "0000:00:02.0"
       gpu_id  x = x
       first [] = Nothing
       first (uuid:_) = Just $ uuid
-      with_gpu "hdx" = getVisibleVms
+      with_gpu "0000:00:02.0" = getVisibleVms
       with_gpu gpu   = getVmsBy (\vm -> (== gpu) <$> getVmGpu vm)
 
 getVmSeamlessMouseLeft :: Uuid -> Rpc Int
