@@ -180,6 +180,7 @@ import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.GuestRpcAgent as RpcAgent
 import XenMgr.Connect.NetworkDaemon
 import XenMgr.Connect.Xenvm ( resumeFromSleep, resumeFromFile, suspendToFile )
+import XenMgr.Connect.Xl
 import XenMgr.Connect.InputDaemon
 import XenMgr.Config
 import XenMgr.Errors
@@ -928,7 +929,7 @@ rebootVm uuid = do
        then RpcAgent.reboot uuid
        else Xenvm.reboot uuid
 
-shutdownVm :: Uuid -> Rpc ()
+shutdownVm :: Uuid -> IO ()
 shutdownVm uuid = do
     info $ "shutting down VM " ++ show uuid
     acpi <- getVmAcpiState uuid
@@ -940,7 +941,8 @@ shutdownVm uuid = do
       info $ "resuming " ++ show uuid ++ " from S3 DONE."
     if use_agent
        then RpcAgent.shutdown uuid
-       else Xenvm.shutdown uuid
+       --else Xenvm.shutdown uuid
+       else Xl.shutdown uuid
 
 canIssueVmShutdown :: Vm Bool
 canIssueVmShutdown = liftRpc . Xenvm.isXenvmUp =<< vmUuid
@@ -948,7 +950,7 @@ canIssueVmShutdown = liftRpc . Xenvm.isXenvmUp =<< vmUuid
 shutdownVmIfSafe :: Vm ()
 shutdownVmIfSafe = safe =<< canIssueVmShutdown where
     safe False = vmUuid >>= \uuid -> warn $ "ignoring request to shutdown VM " ++ show uuid
-    safe _     = liftRpc . shutdownVm =<< vmUuid
+    safe _     = liftIO . shutdownVm =<< vmUuid
 
 forceShutdownVm :: Uuid -> Rpc ()
 forceShutdownVm uuid = do
