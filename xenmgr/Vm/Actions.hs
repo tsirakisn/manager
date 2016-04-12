@@ -177,10 +177,10 @@ import qualified Vm.V4VFirewall as Firewall
 import Vm.Balloon
 import XenMgr.Rpc
 import qualified XenMgr.Connect.Xenvm as Xenvm
+import qualified XenMgr.Connect.Xl as Xl
 import qualified XenMgr.Connect.GuestRpcAgent as RpcAgent
 import XenMgr.Connect.NetworkDaemon
 import XenMgr.Connect.Xenvm ( resumeFromSleep, resumeFromFile, suspendToFile )
-import XenMgr.Connect.Xl
 import XenMgr.Connect.InputDaemon
 import XenMgr.Config
 import XenMgr.Errors
@@ -498,7 +498,8 @@ startVmInternal uuid = do
     liftRpc $ maybePtGpuFuncs uuid
     config <- prepareAndCheckConfig uuid
     case config of
-      Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
+      --Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
+      Just c -> info ("done checks for VM " ++ show uuid) >> Xl.start uuid
       Nothing-> return ()
   where
 
@@ -722,10 +723,10 @@ bootVm :: VmConfig -> XM ()
 bootVm config
   = do -- fire xenvm up if necessary, send configuration to xenvm
        monitor <- vm_monitor <$> xmRunVm uuid vmContext
-       liftRpc $ do
-         whenM (not <$> ensureXenvm monitor config) $ do -- starts xenvm + writes config if not up
+       --liftRpc $ do
+       --  whenM (not <$> ensureXenvm monitor config) $ do -- starts xenvm + writes config if not up
            -- xenvm was already up, need to send it new config
-           updateXVConfig config
+       --    updateXVConfig config
 
        withPreCreationState uuid create
     where
@@ -929,7 +930,7 @@ rebootVm uuid = do
        then RpcAgent.reboot uuid
        else Xenvm.reboot uuid
 
-shutdownVm :: Uuid -> IO ()
+shutdownVm :: Uuid -> Rpc ()
 shutdownVm uuid = do
     info $ "shutting down VM " ++ show uuid
     acpi <- getVmAcpiState uuid
@@ -942,15 +943,15 @@ shutdownVm uuid = do
     if use_agent
        then RpcAgent.shutdown uuid
        --else Xenvm.shutdown uuid
-       else Xl.shutdown uuid
+       else liftIO $ Xl.shutdown uuid
 
 canIssueVmShutdown :: Vm Bool
 canIssueVmShutdown = liftRpc . Xenvm.isXenvmUp =<< vmUuid
 
 shutdownVmIfSafe :: Vm ()
 shutdownVmIfSafe = safe =<< canIssueVmShutdown where
-    safe False = vmUuid >>= \uuid -> warn $ "ignoring request to shutdown VM " ++ show uuid
-    safe _     = liftIO . shutdownVm =<< vmUuid
+    --safe False = vmUuid >>= \uuid -> warn $ "ignoring request to shutdown VM " ++ show uuid
+    safe _     = liftRpc . shutdownVm =<< vmUuid
 
 forceShutdownVm :: Uuid -> Rpc ()
 forceShutdownVm uuid = do
