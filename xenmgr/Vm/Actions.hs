@@ -498,8 +498,8 @@ startVmInternal uuid = do
     liftRpc $ maybePtGpuFuncs uuid
     config <- prepareAndCheckConfig uuid
     case config of
-      --Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
-      Just c -> info ("done checks for VM " ++ show uuid) >> Xl.start uuid
+      Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
+      --Just c -> info ("done checks for VM " ++ show uuid) >> Xl.start uuid
       Nothing-> return ()
   where
 
@@ -743,8 +743,9 @@ bootVm config
        bootstrap <- xmWithBalloonLock $ do
          liftRpc $ do
            balanced <-
-             do ok <- balanceToBoot uuid
-                if ok
+             --do ok <- balanceToBoot uuid
+             do
+                if True
                    then return True
                    else do
                      -- another attempt with minimal memory
@@ -768,7 +769,7 @@ bootVm config
                   then return False
                   else liftIO (doesFileExist suspend_file)
            if not exists
-                then do Xenvm.startPaused uuid
+                then do liftIO $ Xl.start uuid
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
                         resumeFromFile uuid suspend_file False True
          return bootstrap
@@ -833,7 +834,7 @@ bootVm config
           -- assign sticky cd drives
           mapM_ (\d -> assignCdDevice d uuid) =<< getVmStickyCdDevices uuid
           info $ "unpause " ++ show uuid
-          Xenvm.unpause uuid
+          liftIO $ Xl.unpause
         -- wait for bootup services to complete if using sentinel
         maybe (return()) (\p -> liftIO 
                             . void 
@@ -956,11 +957,11 @@ shutdownVmIfSafe = safe =<< canIssueVmShutdown where
 forceShutdownVm :: Uuid -> Rpc ()
 forceShutdownVm uuid = do
     info $ "forcibly shutting down VM " ++ show uuid
-    Xenvm.destroy uuid
+    liftIO $ Xl.destroy uuid
 
 forceShutdownVmIfSafe :: Vm ()
 forceShutdownVmIfSafe = safe =<< canIssueVmShutdown where
-    safe False = vmUuid >>= \uuid -> warn $ "ignoring request to forcibly shutdown VM " ++ show uuid
+    --safe False = vmUuid >>= \uuid -> warn $ "ignoring request to forcibly shutdown VM " ++ show uuid
     safe _     = liftRpc . forceShutdownVm =<< vmUuid
 
 pauseVm :: Uuid -> Rpc ()

@@ -29,6 +29,7 @@ import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
+import Data.String
 import System.IO
 import Text.Printf (printf)
 import Tools.Log
@@ -59,6 +60,7 @@ import XenMgr.XM
 import XenMgr.CdLock
 
 import qualified XenMgr.Connect.Xenvm as Xenvm
+import qualified XenMgr.Connect.Xl as Xl
 import Rpc.Autogen.NetworkDaemonClient
 import Rpc.Autogen.CtxusbDaemonClient
 
@@ -78,6 +80,7 @@ monitorAndReactVm uuid
               monitor <- liftRpc $ newVmMonitor uuid
               c <- xmCreateAndRegisterVmContext uuid monitor
               processVmEvent <- vmEventProcessor
+              liftRpc $ vmStateWatch monitor
               liftRpc . void $ react monitor (\hid e -> runVm c $ processVmEvent hid e)
 
 -- TODO: clean method to stop monitoring events
@@ -140,6 +143,9 @@ detectPvAddonsR =
 
 detectBsgDevStatusR =
   whenE VmBsgDevNodeChange checkBsgDevStatus
+
+detectStateChange = 
+  whenE VmStateUpdate notifyVmStateUpdate
 
 clockR = mkReact f where
   f (VmRtcChange offset) = vmUuid >>= \uuid -> saveConfigProperty uuid vmTimeOffset offset
@@ -225,6 +231,9 @@ notifyNetworkDaemonR = mkReact f where
 uuidRpc :: (Uuid -> Rpc a) -> Vm a
 uuidRpc f = vmUuid >>= \uuid -> liftRpc (f uuid)
 
+uuidIO :: (Uuid -> IO a) -> Vm a
+uuidIO f = vmUuid >>= \uuid -> liftIO (f uuid)
+
 vmEventProcessor :: XM (HandlerID -> VmEvent -> Vm ())
 vmEventProcessor
     = do shut_r <- liftIO $ newMVar CreationFailure
@@ -245,6 +254,7 @@ vmEventProcessor
                `mappend` powerlinkR xm get_shut_r
                `mappend` runEventScriptR
                `mappend` notifyExternalR
+               `mappend` detectStateChange
          return $
                 \hid e -> sequence_ $ [err (f e) | f <- r]
       where
@@ -286,7 +296,7 @@ whenRebooted xm = do
     p <- uuidRpc getVmPreserveOnReboot
     -- do not destroy/restart vm if preserve on reboot flag is set
     when (not p) $ do
-      uuidRpc Xenvm.destroy
+      uuidIO Xl.destroy
       uuidRpc unapplyVmFirewallRules
       liftIO $ removeVmEnvIso uuid
       uuidRpc (backgroundRpc . runXM xm . startVm)
@@ -451,6 +461,20 @@ checkBsgDevStatus = uuidRpc $ \uuid -> whenDomainID_ uuid $ \domid ->
         [a,b,c,d] -> let r = maybeRead in
           BSGDevice <$> r a <*> r b <*> r c <*> r d
         _ -> Nothing
+
+notifyVmStateUpdate :: Vm ()
+notifyVmStateUpdate = do
+    uuid <- vmUuid
+    maybe_state <- liftIO $ xsRead ("/vm/" ++ show uuid ++ "/state")
+    liftRpc $ notifyComCitrixXenclientXenmgrNotify
+      xenmgrObjectPath
+      (uuidStr uuid)
+      (st maybe_state)
+    where
+    st s = 
+      case s of
+        Just state -> (fromString "vm:state:" ++ state)
+        Nothing -> (fromString "vm:state:shutdown")
 
 notifyVmStateChange :: VmState -> Vm ()
 notifyVmStateChange state
