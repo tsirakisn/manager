@@ -1363,8 +1363,8 @@ mountVmDisk uuid diskID readonly path =
                  xsWrite (xspath ++ "/path") path
                  return ()
           where
-            removedev dev = do
-              tapDestroy dev
+            removedev path = do
+              tapDestroy path
               xsRm xspath
             xspath = "/xenmgr/mount/" ++ show uuid ++ "/" ++ show diskID
 
@@ -1385,7 +1385,7 @@ unmountVmDisk uuid diskID =
                Nothing -> error $ "device not mounted " ++ show dev
                Just mountpath -> do
                  readProcessOrDie "umount" [mountpath] ""
-                 tapDestroy dev
+                 tapDestroy vhdpath 
                  xsRm xspath
                  return ()
           where

@@ -6,8 +6,12 @@ module XenMgr.Connect.Xl
       start
     , shutdown
     , getDomainId
+    , unpause
+    , destroy 
     , onNotify 
-    , onNotifyRemove 
+    , onNotifyRemove
+    , isRunning
+    , state
     ) where
 
 import Control.Exception as E
@@ -17,10 +21,13 @@ import Control.Monad.Error hiding (liftIO)
 import Control.Concurrent
 import Data.String
 import Vm.Types
+import Vm.State
+import Tools.Misc
+import Tools.XenStore
+import Tools.Log
 import System.Cmd
 import System.Process
 import XenMgr.Rpc
-import Tools.Misc
 import qualified Data.Map as M
 
 type NotifyHandler = [String] -> Rpc ()
@@ -33,9 +40,23 @@ shutdown uuid = do
     case exitCode of 
       _ -> return ()
 
+unpause :: Uuid -> IO ()
+unpause uuid = do
+    domid <- getDomainId uuid
+    exitCode <- system ("xl unpause " ++ domid)
+    case exitCode of
+      _ -> return ()
+
 start :: Uuid -> IO ()
 start uuid = do
-    exitCode <- system ("xl create " ++ configPath uuid)
+    exitCode <- system ("xl create " ++ configPath uuid ++ " -p")
+    case exitCode of
+      _ -> return ()
+
+destroy :: Uuid -> IO ()
+destroy uuid = do 
+    domid <- getDomainId uuid
+    exitCode <- system ("xl destroy " ++ domid)
     case exitCode of
       _ -> return ()
 
@@ -54,7 +75,7 @@ onNotify uuid msgname action =
       rpcOnSignal rule process
   where
     process _ signal =
-        let [uuidV, _, statusV] = signalArgs signal
+        let [uuidV, statusV] = signalArgs signal
             uuid'  = let Just v = fromVariant $ uuidV in v
             status = let Just v = fromVariant $ statusV in v
             splits = split ':' status
@@ -71,7 +92,7 @@ onNotifyRemove uuid msgname action =
         rpcOnSignalRemove rule process
   where
     process _ signal =
-        let [uuidV, _, statusV] = signalArgs signal
+        let [uuidV, statusV] = signalArgs signal
             uuid'  = let Just v = fromVariant $ uuidV in v
             status = let Just v = fromVariant $ statusV in v
             splits = split ':' status
@@ -103,3 +124,15 @@ xlcall uuid memb args =
 
 configPath uuid = "/storage/configs/" ++ show uuid ++ ".cfg"
 
+isRunning :: (MonadRpc e m) => Uuid -> m Bool
+isRunning uuid = (not . (`elem` [Shutdown, Rebooted])) `fmap` (liftIO $ state uuid)
+
+state :: Uuid -> IO VmState
+state uuid = 
+    do
+        maybe_state <- xsRead ("/state/" ++ show uuid ++ "/state")
+        case maybe_state of
+          Just state -> do 
+                          info $ "active vms, state = " ++ show state
+                          return $ stateFromStr state
+          Nothing    -> return $ stateFromStr "shutdown"

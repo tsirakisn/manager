@@ -23,7 +23,7 @@ module XenMgr.Connect.Xenvm
                domainID
              , stubDomainID
              , domainXsPath
-             , isRunning
+             --, isRunning
              , isFocused
              , state
              , stateStr
