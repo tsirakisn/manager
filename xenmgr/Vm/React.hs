@@ -465,7 +465,7 @@ checkBsgDevStatus = uuidRpc $ \uuid -> whenDomainID_ uuid $ \domid ->
 notifyVmStateUpdate :: Vm ()
 notifyVmStateUpdate = do
     uuid <- vmUuid
-    maybe_state <- liftIO $ xsRead ("/vm/" ++ show uuid ++ "/state")
+    maybe_state <- liftIO $ xsRead ("/state/" ++ show uuid ++ "/state")
     liftRpc $ notifyComCitrixXenclientXenmgrNotify
       xenmgrObjectPath
       (uuidStr uuid)

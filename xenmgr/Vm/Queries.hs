@@ -161,12 +161,13 @@ import System.Posix.Files (fileSize, getFileStatus)
 import Tools.XenStore
 
 import XenMgr.Rpc
-import XenMgr.Connect.Xenvm (isRunning)
 import XenMgr.Connect.NetworkDaemon
 import XenMgr.Config
 import XenMgr.Errors
 import XenMgr.Host
+import XenMgr.Connect.Xl (isRunning)
 import qualified XenMgr.Connect.Xenvm as Xenvm
+import qualified XenMgr.Connect.Xl as Xl
 import Rpc.Autogen.SurfmanClient
 
 import Data.Bits
@@ -739,7 +740,7 @@ whenManagedVm uuid f = whenM ( isManagedVm uuid ) f
 countRunningVm :: VmType -> Rpc Int
 countRunningVm typ = length <$> (filterM running =<< getVmsByType typ)
     where
-      running uuid = Xenvm.isRunning uuid
+      running uuid = Xl.isRunning uuid
 
 getVmIconBytes :: Uuid -> Rpc B.ByteString
 getVmIconBytes uuid =

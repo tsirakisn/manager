@@ -321,6 +321,9 @@ property name =
     , property_location = \uuid -> join [dbPath uuid, convert name]
     }
 
+wrapQuotes :: String -> String
+wrapQuotes = (++"'") <$> ("'"++)
+
 -- Locate a named property within a VM of given uuid
 locate :: ConfigProperty -> Uuid -> Location
 locate p uuid = property_location p uuid
@@ -536,27 +539,27 @@ getXenvmConfig :: VmConfig -> Rpc XenvmConfig
 getXenvmConfig cfg =
     fmap (XenvmConfig . concat) . mapM (force <=< future) $
     [prelude, diskSpecs cfg, nicSpecs cfg, pciSpecs cfg
-    , map ("extra-hvm="++) <$> extraHvmSpecs uuid
+    , extraHvmSpecs uuid
     , miscSpecs cfg]
   where
     uuid = vmcfgUuid cfg
     -- First section of xenvm config file
     prelude = do Just uuid <- readConfigProperty uuid vmUuidP :: Rpc (Maybe Uuid)
-                 let kernel = maybe [] (\path -> ["kernel="++path]) (vmcfgKernelPath cfg)
-                 let name = maybeToList $ ("name="++) <$> (vmcfgName cfg)
-                 return $ [ "uuid=" ++ (show uuid)
-                          , "power-management=2"
-                          , "startup=poweroff"
-                          , "extra-local-watch=power-state"
-                          , "on_restart=preserve"
-                          , "qemu-dm-path=" ++ (vmcfgQemuDmPath cfg)
-                          , "qemu-dm-timeout=" ++ show (vmcfgQemuDmTimeout cfg)
-                          , "xci-cpuid-signature=" ++ (if vmcfgXciCpuidSignature cfg then "true" else "false")
-                          ] ++ oem_acpi
+                 let kernel = maybe [] (\path -> ["kernel='"++path++"'"]) (vmcfgKernelPath cfg)
+                 let name = maybeToList $ (++"'") <$> ("name='"++) <$> (vmcfgName cfg)
+                 return $ [ "uuid='" ++ (show uuid) ++ "'"
+                          --, "power-management=2"
+                          --, "startup=poweroff"
+                          --, "extra-local-watch=power-state"
+                          --, "on_restart=preserve"
+                          --, "qemu-dm-path=" ++ (vmcfgQemuDmPath cfg)
+                          --, "qemu-dm-timeout=" ++ show (vmcfgQemuDmTimeout cfg)
+                          --, "xci-cpuid-signature=" ++ (if vmcfgXciCpuidSignature cfg then "true" else "false")
+                          ] -- oem_acpi
                             ++ name
                             ++ kernel
-    oem_acpi | vmcfgOemAcpiFeatures cfg = [ "oem-features=1" ]
-             | otherwise = [ ]
+    --oem_acpi | vmcfgOemAcpiFeatures cfg = [ "oem-features=1" ]
+             -- | otherwise = [ ]
 
 -- Next section: information about disk drives
 allDisks = vmcfgDisks
@@ -569,18 +572,23 @@ isDiskValid disk =
       _               -> return True
 
 diskSpecs :: VmConfig -> Rpc [DiskSpec]
-diskSpecs cfg = mapM (diskSpec uuid crypto_dirs) =<< disks where
-  disks       = filter diskEnabled <$> validDisks cfg
-  crypto_dirs = vmcfgCryptoKeyDirs cfg
-  uuid        = vmcfgUuid cfg
+diskSpecs cfg = do
+  disklist <- dSpec
+  return $ ["disk=[" ++ (concat (intersperse "," disklist)) ++ "]"]
+
+  where
+    dSpec       = mapM (diskSpec uuid crypto_dirs) =<< disks
+    disks       = filter diskEnabled <$> validDisks cfg
+    crypto_dirs = vmcfgCryptoKeyDirs cfg
+    uuid        = vmcfgUuid cfg
 
 diskSpec :: Uuid -> [FilePath] -> Disk -> Rpc DiskSpec
 diskSpec uuid crypto_dirs d  = do
   let crypto = cryptoSpec uuid crypto_dirs d
-  return $ "disk=" ++ printf "%s:%s:%s:%s:%s:%s:%s"
+  return $ printf "'%s,%s,%s,%s'"
              (diskPath d) (enumMarshall $ diskType d) (diskDevice d) (enumMarshall $ diskMode d)
-             (enumMarshall $ diskDeviceType d) snapshot crypto
-      where snapshot = maybe "" enumMarshall (diskSnapshotMode d)
+             --crypto  figure out how to handle the crypto keys at some point...
+      --where snapshot = maybe "" enumMarshall (diskSnapshotMode d)
 
 -- Next section: information about Network Interfaces
 nicSpecs :: VmConfig -> Rpc [NicSpec]
@@ -588,7 +596,7 @@ nicSpecs cfg =
     do amt <- amtPtActive (vmcfgUuid cfg)
        maybeHostmac <- liftIO eth0Mac
        -- Get the configuration file entries ...
-       (fmap.map) (\nic -> "vif=" ++ nicSpec cfg amt maybeHostmac nic (net_domid nic)) .
+       (fmap.map) (\nic -> "vif=['" ++ (nicSpec cfg amt maybeHostmac nic (net_domid nic)) ++ "']") .
          -- ... for all the nics which are defined & enabled & pass the policy check
          filterM policyCheck . filter nicdefEnable $ vmcfgNics cfg
 
@@ -652,18 +660,7 @@ pciSpecs cfg = do
     let devices = vmcfgPciPtDevices cfg
         uuid    = vmcfgUuid cfg
 
-    display_str <- readConfigProperty uuid vmDisplay
-    let display = case display_str of
-                    Just ('v':'n':'c':_) -> VNC
-                    _                    -> Other
-
-    xengfx <- liftIO $ ifM (doesFileExist "/config/xengfx") (return "extra-hvm=xengfx=") (return "extra-hvm=std-vga=")
-
-    return $
-         -- and get specs from them
-         map (\dev -> "pci=0,bind," ++ stringAddr dev ++ fslot dev ++ msi dev) devices
-          -- plus some vga info depending on vm type
-          ++ vgaopts xengfx (vmcfgGraphics cfg) (vmcfgVgpuMode cfg) display
+    return $ ["pci=[" ++ (concat (intersperse "," (map (\dev -> "'" ++ stringAddr dev ++ "'") devices))) ++ "]"]
  where
    stringAddr (PciPtDev d _ _ _) =
            printf "%04x:%02x:%02x.%x"
@@ -672,32 +669,20 @@ pciSpecs cfg = do
                (pciSlot   addr)
                (pciFunc   addr)
        where addr = devAddr d
-   -- Xenvm requires guest_slot=blabla to be passed if we want to force the pci device slot in guest
-   -- to specific value
-   fslot (PciPtDev _ PciSlotDontCare _ _)  = ""
-   fslot (PciPtDev d PciSlotMatchHost _ _) = printf ",guest_slot=%d" (pciSlot . devAddr $ d)
-   fslot (PciPtDev d (PciSlotUse s) _ _)   = printf ",guest_slot=%d" s
-
-   msi d | pciPtMsiTranslate d = ",msitranslate=1"
-         | otherwise           = ""
-
-   -- Some additional info depending on type of vm
-   vgaopts xengfx = vgaopts' where
-     vgaopts' HDX    Nothing _           = [ "extra-hvm=gfx_passthru=" ]
-     vgaopts' HDX    (Just vgpu) _
-         | null (vgpuPciPtDevices vgpu) = [ "extra-hvm=vgpu", xengfx, "extra-hvm=surfman=" ]
-         | otherwise                    = [ "extra-hvm=gfx_passthru=", "extra-hvm=surfman=" ]
-     vgaopts' VGAEmu _       VNC         = [ xengfx ]
-     vgaopts' VGAEmu _       _           = [ xengfx, "extra-hvm=surfman=" ]
 
 -- Extra HVM parameters from database
 extraHvmSpecs :: Uuid -> Rpc [Param]
-extraHvmSpecs uuid =
-    readConfigPropertyDef uuid vmExtraHvms []
+extraHvmSpecs uuid = 
+    do
+        prop <- readConfigPropertyDef uuid vmExtraHvms []
+        return $ ["device_model_args=[" ++ (concat (intersperse "," prop)) ++ "]"]
 
 cpuidResponses :: VmConfig -> [String]
 cpuidResponses cfg = map option (vmcfgCpuidResponses cfg) where
     option (CpuidResponse r) = printf "cpuid=%s" r
+
+wrapQuotes :: String -> String
+wrapQuotes = (++"'") <$> ("'"++)
 
 -- Additional misc stuff in xenvm config
 miscSpecs :: VmConfig -> Rpc [Param]
@@ -738,7 +723,7 @@ miscSpecs cfg = do
     return $
            t ++ v ++ cdromParams
         ++ ["memory="++show (vmcfgMemoryMib cfg) ]
-        ++ ["memory-max="++show (vmcfgMemoryStaticMaxMib cfg) ]
+        ++ ["maxmem="++show (vmcfgMemoryStaticMaxMib cfg) ]
         ++ smbios_pt ++ snd ++ audioRec ++ coresPSpms ++ biosStrs
         ++ stubdom_ ++ cpuidResponses cfg ++ usb ++ platform ++ other               
         ++ hpet_
@@ -795,7 +780,7 @@ miscSpecs cfg = do
           , ("nx"              , vmNx)
           , ("display"         , vmDisplay)
           , ("boot"            , vmBoot)
-          , ("cmdline"         , vmCmdLine)
+          , ("extra"           , wrapQuotes vmCmdLine)
           , ("initrd"          , vmInitrd)
           , ("acpi-pt"         , vmAcpiPt)
           , ("vcpus"           , vmVcpus)
@@ -807,7 +792,7 @@ miscSpecs cfg = do
           , ("passthrough-io"  , vmPassthroughIo)
           , ("passthrough-mmio", vmPassthroughMmio)
           , ("startup"         , vmStartup)
-          , ("flask-label"     , vmFlaskLabel)
+          , ("seclabel"        , wrapQuotes vmFlaskLabel)
           , ("serial"          , vmSerial)
           , ("stubdom-cmdline" , vmStubdomCmdline)
           , ("stubdom-memory"  , vmStubdomMemory)

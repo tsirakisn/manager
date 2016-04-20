@@ -243,7 +243,7 @@ killVmWatch (VmWatch _ _ active quit threadID) =
 addWatch :: Uuid ->VmWatch -> Rpc ()
 addWatch uuid ws = 
     do 
-        liftIO $ mapM_ (add ("/state/" ++ show uuid) [ws]
+        liftIO $ mapM_ (add ("/state/" ++ show uuid)) [ws]
     where
       add vm_path (VmWatch path pred active quit thread_id) =
           forkIO $ do
@@ -272,11 +272,10 @@ remWatches ws = liftIO $ mapM_ killVmWatch ws
 stateWatch :: (VmEvent -> IO ()) -> IO VmWatch
 stateWatch submit = newVmWatch "/state" (submit VmStateUpdate)
 
-watchesForVm :: (VmEvent -> IO ()) -> Uuid -> [IO VmWatch]
-watchesForVm submit uuid =
+watchesForVm :: (VmEvent -> IO ()) -> [IO VmWatch]
+watchesForVm submit =
     [ newVmWatch "/attr/PVAddons" (submit VmPvAddonsNodeChange)
     , newVmWatch "/attr/PVAddonsUninstalled" (submit VmPvAddonsUninstallNodeChange)
     , newVmWatch "/bsgdev" (submit VmBsgDevNodeChange)
-    , newVmWatch ("/vm/" ++ show uuid ++ "/state") (submit VmStateUpdate)
     ]
 
