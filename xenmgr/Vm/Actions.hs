@@ -726,13 +726,13 @@ bootVm config
        --liftRpc $ do
        --  whenM (not <$> ensureXenvm monitor config) $ do -- starts xenvm + writes config if not up
            -- xenvm was already up, need to send it new config
-       --    updateXVConfig config
+       liftRpc $ updateXVConfig config
 
        withPreCreationState uuid create
     where
       uuid = vmcfgUuid config
       updateXVConfig :: VmConfig -> Rpc ()
-      updateXVConfig c = writeXenvmConfig c >> Xenvm.readConfig uuid
+      updateXVConfig c = writeXenvmConfig c
       create = do
        -- create environment iso
        whenM (getVmOvfTransportIso uuid) . liftIO $ do
@@ -780,6 +780,8 @@ bootVm config
        force phases
 
       xsp domid = "/local/domain/" ++ show domid
+      xsp_dom0  = "/local/domain/0"
+      v4vBack domid = "/backend/v4v/" ++ show domid ++ "/0"
       writable domid path = do
         xsWrite path ""
         xsSetPermissions path [ Permission 0 []
@@ -796,7 +798,20 @@ bootVm config
           -- read drives media state
           liftIO $
             mapM_ updateCdDeviceMediaStatusKey =<< liftIO getHostBSGDevices
+     
+      --Write the xenstore nodes for the backend and the frontend for the v4v device
+      --set states to Unknown and Initializing respectively, like xenvm used to do 
+      setupV4VDevice :: Uuid -> Rpc ()
+      setupV4VDevice uuid = do
+          whenDomainID_ uuid $ \domid -> liftIO $ do
+            xsWrite (xsp domid ++ "/device/v4v/0/backend") "/local/domain/0/backend/v4v/" ++show domid ++ "/0"
+            xsWrite (xsp domid ++ "/device/v4v/0/backend-id") "0"
+            xsWrite (xsp domid ++ "/device/v4v/0/state") "1"
 
+            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
+            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") show domid
+            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
+    
       handleCreationPhases :: XM ()
       handleCreationPhases = do
         waitForVmInternalState uuid CreatingDevices 30
@@ -834,7 +849,7 @@ bootVm config
           -- assign sticky cd drives
           mapM_ (\d -> assignCdDevice d uuid) =<< getVmStickyCdDevices uuid
           info $ "unpause " ++ show uuid
-          liftIO $ Xl.unpause
+          liftIO $ Xl.unpause uuid
         -- wait for bootup services to complete if using sentinel
         maybe (return()) (\p -> liftIO 
                             . void 
