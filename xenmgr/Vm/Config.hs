@@ -321,9 +321,6 @@ property name =
     , property_location = \uuid -> join [dbPath uuid, convert name]
     }
 
-wrapQuotes :: String -> String
-wrapQuotes = (++"'") <$> ("'"++)
-
 -- Locate a named property within a VM of given uuid
 locate :: ConfigProperty -> Uuid -> Location
 locate p uuid = property_location p uuid
@@ -446,7 +443,7 @@ vmV4v = property "config.v4v"
 vmHpet = property "config.hpet"
 vmHpetDefault = True
 vmTimerMode = property "config.timer-mode"
-vmTimerModeDefault = (1 :: Int)
+vmTimerModeDefault = "no_delay_for_missed_ticks"
 vmNestedHvm = property "config.nestedhvm"
 vmSerial = property "config.serial"
 vmStubdomMemory = property "config.stubdom-memory"
@@ -681,8 +678,13 @@ cpuidResponses :: VmConfig -> [String]
 cpuidResponses cfg = map option (vmcfgCpuidResponses cfg) where
     option (CpuidResponse r) = printf "cpuid=%s" r
 
+--helper function to wrap config options in quotes (xl specific)
 wrapQuotes :: String -> String
 wrapQuotes = (++"'") <$> ("'"++)
+
+--helper function to wrap config option in brackets (xl specific)
+wrapBrackets :: String -> String
+wrapBrackets = (++"]") <$> ("["++)
 
 -- Additional misc stuff in xenvm config
 miscSpecs :: VmConfig -> Rpc [Param]
@@ -724,7 +726,7 @@ miscSpecs cfg = do
            t ++ v ++ cdromParams
         ++ ["memory="++show (vmcfgMemoryMib cfg) ]
         ++ ["maxmem="++show (vmcfgMemoryStaticMaxMib cfg) ]
-        ++ smbios_pt ++ snd ++ audioRec ++ coresPSpms ++ biosStrs
+        ++ smbios_pt ++ snd ++ audioRec ++ coresPSpms
         ++ stubdom_ ++ cpuidResponses cfg ++ usb ++ platform ++ other               
         ++ hpet_
         ++ timer_mode_
@@ -744,7 +746,7 @@ miscSpecs cfg = do
              where i True = 1
                    i _    = 0
       timer_mode = readConfigPropertyDef uuid vmTimerMode vmTimerModeDefault >>= 
-                   \ v -> return ["timer-mode=" ++ show v]
+                   \ v -> return ["timer_mode=" ++ (show v)]
       nested = readConfigPropertyDef uuid vmNestedHvm False >>=
                    \ v -> if v then return ["nested=true"] else return []
 
@@ -771,45 +773,46 @@ miscSpecs cfg = do
       -- Other config keys taken directly from .config subtree which we delegate directly
       -- to xenvm
       passToXenvmProperties =
-          [ ("notify"          , vmNotify)
-          , ("hvm"             , vmHvm)
+          [ ("hvm"             , vmHvm)
           , ("pae"             , vmPae)
           , ("acpi"            , vmAcpi)
           , ("apic"            , vmApic)
-          , ("viridian"        , vmViridian)
+          , ("viridian"        , vmViridian) --set to 'default'
           , ("nx"              , vmNx)
-          , ("display"         , vmDisplay)
-          , ("boot"            , vmBoot)
-          , ("extra"           , wrapQuotes vmCmdLine)
-          , ("initrd"          , vmInitrd)
-          , ("acpi-pt"         , vmAcpiPt)
+          , ("display"         , vmDisplay) --this should now be set to surfman or dhqemu or none
+          --, ("boot"            , vmBoot) --TODO come back to this
+          , ("extra"           , vmCmdLine)
+          --, ("initrd"          , vmInitrd)  --probably remove this, seems duplicate of kernel option
+          --, ("acpi-pt"         , vmAcpiPt) --TODO evaluate this
           , ("vcpus"           , vmVcpus)
           , ("hap"             , vmHap)
-          , ("vsnd"            , vmVsnd)
-          , ("vkbd"            , vmVkbd)
-          , ("vfb"             , vmVfb)
-          , ("v4v"             , vmV4v)
-          , ("passthrough-io"  , vmPassthroughIo)
-          , ("passthrough-mmio", vmPassthroughMmio)
-          , ("startup"         , vmStartup)
-          , ("seclabel"        , wrapQuotes vmFlaskLabel)
-          , ("serial"          , vmSerial)
-          , ("stubdom-cmdline" , vmStubdomCmdline)
-          , ("stubdom-memory"  , vmStubdomMemory)
+          --, ("vsnd"            , vmVsnd) -- Doesn't look like it's used
+          , ("vkbd"            , vmVkbd) --Patch in xl to support creating the vkbd
+          --, ("vfb"             , vmVfb)  -- Don't care about this, maybe surfman cares...
+          --, ("passthrough-io"  , vmPassthroughIo)  --Both options appear unused
+          --, ("passthrough-mmio", vmPassthroughMmio)
+          --, ("startup"         , vmStartup)  --TODO: likely remove this
+          , ("seclabel"        , vmFlaskLabel)
+          , ("serial"          , vmSerial) 
+          --, ("stubdom-cmdline" , vmStubdomCmdline) --stubdom "extra" field not sure how to handle this yet
+          --, ("stubdom-memory"  , vmStubdomMemory) --stubdom "memory" field not sure how to handle this yet
           ]
-
-      biosStrs = [ "bios-string=xenvendor-manufacturer=Citrix"
-                 , "bios-string=xenvendor-product=XenClient " ++ version
-                 , "bios-string=xenvendor-seamless-hint=" ++ if vmcfgSeamlessSupport cfg then "1" else "0"
-                 ] where
-                XcVersion version = vmcfgXcVersion cfg
 
       otherXenvmParams = concat <$> sequence
                          [ reverse . catMaybes <$> mapM g passToXenvmProperties
                          , extra_xenvm
                          , smbios_sysinfo
                          ]
-        where g (name,prop) = fmap (\v -> name ++ "=" ++ v) <$> readConfigProperty uuid prop
+        where g (name,prop) = fmap (\v -> 
+                              case name of 
+                                "viridian" -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v) 
+                                "serial"   -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v)
+                                "vkbd"     -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v) --this might change depending on how we implement 
+                                "extra"    -> name ++ "=" ++ (wrapQuotes v) 
+                                "seclabel" -> name ++ "=" ++ (wrapQuotes v)
+                                _          -> name ++ "=" ++ v) <$> 
+                                readConfigProperty uuid prop
+
               -- additional parameters passed through config/extra-xenvm/... key
               extra_xenvm :: Rpc [Param]
               extra_xenvm = readConfigPropertyDef uuid vmExtraXenvm []

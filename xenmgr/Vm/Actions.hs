@@ -801,17 +801,24 @@ bootVm config
      
       --Write the xenstore nodes for the backend and the frontend for the v4v device
       --set states to Unknown and Initializing respectively, like xenvm used to do 
-      setupV4VDevice :: Uuid -> Rpc ()
-      setupV4VDevice uuid = do
+      --setupV4VDevice :: Uuid -> IO ()
+      setupV4VDevice uuid =
           whenDomainID_ uuid $ \domid -> liftIO $ do
-            xsWrite (xsp domid ++ "/device/v4v/0/backend") "/local/domain/0/backend/v4v/" ++show domid ++ "/0"
+            xsWrite (xsp domid ++ "/device/v4v/0/backend") ("/local/domain/0/backend/v4v/" ++ show domid ++ "/0")
             xsWrite (xsp domid ++ "/device/v4v/0/backend-id") "0"
             xsWrite (xsp domid ++ "/device/v4v/0/state") "1"
 
             xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
-            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") show domid
+            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
             xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
-    
+
+      --setupBiosStrings :: Uuid -> Rpc ()
+      setupBiosStrings uuid =
+          whenDomainID_ uuid $ \domid -> do
+            liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-manufacturer") "OpenXT"
+            liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-product") "OpenXT 5.0.0"
+            liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-seamless-hint") "0"
+
       handleCreationPhases :: XM ()
       handleCreationPhases = do
         waitForVmInternalState uuid CreatingDevices 30
@@ -822,6 +829,11 @@ bootVm config
           twiddlePermissions uuid
           exportVmSwitcherInfo uuid
           setupCDDrives uuid
+          --No longer passing v4v in the config, keep in db.
+          v4v_enabled <- getVmV4V uuid
+          when v4v_enabled $ setupV4VDevice uuid
+
+          setupBiosStrings uuid
           -- some little network plumbing
           gives_network <- getVmProvidesNetworkBackend uuid
           when gives_network $ whenDomainID_ uuid $ \domid -> do
@@ -1793,7 +1805,7 @@ setVmRestrictDisplayRes uuid v = saveConfigProperty uuid vmRestrictDisplayRes (v
 setVmPreserveOnReboot uuid v = saveConfigProperty uuid vmPreserveOnReboot (v::Bool)
 setVmBootSentinel uuid v = saveOrRmConfigProperty uuid vmBootSentinel (v::Maybe String)
 setVmHpet uuid v = saveConfigProperty uuid vmHpet (v::Bool)
-setVmTimerMode uuid v = saveConfigProperty uuid vmTimerMode (v::Int)
+setVmTimerMode uuid v = saveConfigProperty uuid vmTimerMode (v::String)
 setVmNestedHvm uuid v = saveConfigProperty uuid vmNestedHvm (v::Bool)
 setVmSerial uuid v = saveConfigProperty uuid vmSerial (v::String)
 

@@ -636,10 +636,10 @@ implementationFor xm uuid = self where
   , comCitrixXenclientXenmgrVmSetHpet = restrict' $ setVmHpet uuid
   , comCitrixXenclientXenmgrVmUnrestrictedSetHpet = setVmHpet uuid
 
-  , comCitrixXenclientXenmgrVmGetTimerMode = fromIntegral <$> getVmTimerMode uuid
-  , comCitrixXenclientXenmgrVmUnrestrictedGetTimerMode = fromIntegral <$> getVmTimerMode uuid
-  , comCitrixXenclientXenmgrVmSetTimerMode = (restrict' $ setVmTimerMode uuid) . fromIntegral
-  , comCitrixXenclientXenmgrVmUnrestrictedSetTimerMode = (setVmTimerMode uuid) . fromIntegral
+  , comCitrixXenclientXenmgrVmGetTimerMode = getVmTimerMode uuid
+  , comCitrixXenclientXenmgrVmUnrestrictedGetTimerMode = getVmTimerMode uuid
+  , comCitrixXenclientXenmgrVmSetTimerMode = (restrict' $ setVmTimerMode uuid)
+  , comCitrixXenclientXenmgrVmUnrestrictedSetTimerMode = (setVmTimerMode uuid)
 
   , comCitrixXenclientXenmgrVmGetNestedhvm = getVmNestedHvm uuid
   , comCitrixXenclientXenmgrVmUnrestrictedGetNestedhvm = getVmNestedHvm uuid
