@@ -110,7 +110,7 @@ module Vm.Queries
                , getVmDownloadProgress
                , getVmReady
                , getVmProvidesDefaultNetworkBackend
-               , getVmVkbd
+               , getVmVkb
                , getVmVfb
                , getVmV4V
                , getVmRestrictDisplayDepth
@@ -666,6 +666,7 @@ getVmPrivateSpaceUsedMiB uuid =
         VirtualHardDisk -> fileSz (diskPath d)
         ExternalVdi -> fileSz (diskPath d)
         Aio -> fileSz (diskPath d)
+        Raw -> fileSz (diskPath d)
         PhysicalDevice -> return 0 -- TODO
     fileSz  f = either (const 0) id <$> liftIO (E.try $ fileSz' f :: IO (Either E.SomeException Int))
     fileSz' f = fromIntegral . mib . fileSize <$> getFileStatus f
@@ -1012,7 +1013,7 @@ getVmIcbinnPath uuid = readConfigPropertyDef uuid vmIcbinnPath ""
 getVmOvfTransportIso uuid = readConfigPropertyDef uuid vmOvfTransportIso False
 getVmDownloadProgress uuid = fromMaybe (0::Int) <$> dbRead ("/vm/"++show uuid++"/download-progress")
 getVmReady uuid = readConfigPropertyDef uuid vmReady True
-getVmVkbd uuid = readConfigPropertyDef uuid vmVkbd False
+getVmVkb uuid = readConfigPropertyDef uuid vmVkb False
 getVmVfb uuid = readConfigPropertyDef uuid vmVfb False
 getVmV4V uuid = readConfigPropertyDef uuid vmV4v False
 getVmRestrictDisplayDepth uuid = readConfigPropertyDef uuid vmRestrictDisplayDepth False

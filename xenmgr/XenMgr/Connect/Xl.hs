@@ -4,6 +4,8 @@ module XenMgr.Connect.Xl
     (
     --xl muscly stuff
       start
+    , domainID
+    , domainXsPath
     , shutdown
     , getDomainId
     , unpause
@@ -11,7 +13,9 @@ module XenMgr.Connect.Xl
     , onNotify 
     , onNotifyRemove
     , isRunning
+    , isFocused
     , state
+    , resumeFromSleep
     ) where
 
 import Control.Exception as E
@@ -32,6 +36,56 @@ import qualified Data.Map as M
 
 type NotifyHandler = [String] -> Rpc ()
 type Params = [(String, String)]
+
+
+--wiredMac :: Uuid -> Rpc (Maybe String)
+--wiredMac uuid = wiredNic uuid >>- return . maybe Nothing $ Just . nicMac)
+--
+--wiredNic :: Uuid -> Rpc (Maybe Nic)
+--wiredNic uuid = 
+--    do ns <- nics uuid
+--        case ns of 
+--          []   -> return Nothing
+--          n: _ -> return $ Just n 
+
+--nics :: Uuid -> Rpc [Nic]
+--nics uuid = 
+  
+resumeFromSleep :: Uuid -> IO ()
+resumeFromSleep uuid = do
+    domid <- getDomainId uuid
+    exitCode <- system ("xl trigger " ++ domid ++ " s3resume") 
+    case exitCode of
+      _  -> return ()
+ 
+domainID :: Uuid -> IO (Maybe DomainID)
+domainID uuid = do
+    domid  <- getDomainId uuid
+    return $ if domid == "" then Nothing else Just (read domid :: DomainID)
+
+acpiState :: Uuid -> IO AcpiState
+acpiState uuid = do 
+    domid    <- getDomainId uuid
+    acpi_state <- readProcess "xl" ["acpi-state", show domid] [] 
+    return $ (read acpi_state :: Int)
+
+isFocused :: Uuid -> IO Bool
+isFocused uuid = do
+    s <- state uuid
+    p <- domainXsPath uuid
+    haveFocus s p
+  where
+    
+    haveFocus Shutdown _    = return False
+    haveFocus _        domP = let path = domP ++ "/switcher/have_focus" in
+                              liftIO $ xsRead path >>= return . maybe False (== "1")
+
+domainXsPath :: Uuid -> IO String
+domainXsPath uuid = do
+    domid <- getDomainId uuid
+    case domid of
+      "" -> return $ "/local/domain/unknown"
+      _  -> return $ "/local/domain/" ++ show domid 
 
 shutdown :: Uuid -> IO ()
 shutdown uuid = do
