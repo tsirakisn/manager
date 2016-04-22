@@ -807,7 +807,7 @@ miscSpecs cfg = do
                               case name of 
                                 "viridian" -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v) 
                                 "serial"   -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v)
-                                "vkbd"     -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v) --this might change depending on how we implement 
+                                "vkbd"     -> name ++ "=" ++ (wrapBrackets v) --this might change depending on how we implement 
                                 "extra"    -> name ++ "=" ++ (wrapQuotes v) 
                                 "seclabel" -> name ++ "=" ++ (wrapQuotes v)
                                 _          -> name ++ "=" ++ v) <$> 
