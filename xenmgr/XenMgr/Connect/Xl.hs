@@ -122,7 +122,7 @@ xlcall uuid memb args =
     object = fromString $ "/xl/signal/notify"
 
 
-configPath uuid = "/storage/configs/" ++ show uuid ++ ".cfg"
+configPath uuid = "/tmp/xenmgr-xl-" ++ show uuid
 
 isRunning :: (MonadRpc e m) => Uuid -> m Bool
 isRunning uuid = (not . (`elem` [Shutdown, Rebooted])) `fmap` (liftIO $ state uuid)
