@@ -54,6 +54,7 @@ import Vm.ProductProperty
 
 import qualified Vm.V4VFirewall as Firewall
 import qualified XenMgr.Connect.Xenvm as Xenvm
+import qualified XenMgr.Connect.Xl as Xl
 import XenMgr.Errors
 import qualified XenMgr.Expose.VmDiskObject as VmDiskObj
 import qualified XenMgr.Expose.VmNicObject as VmNicObj
@@ -109,7 +110,7 @@ implementationFor xm uuid = self where
   , comCitrixXenclientXenmgrVmDestroy            = runvm forceShutdownVmIfSafe
   , comCitrixXenclientXenmgrVmSleep              = sleepVm uuid
   , comCitrixXenclientXenmgrVmHibernate          = hibernateVm uuid
-  , comCitrixXenclientXenmgrVmResume             = resumeFromSleep uuid >> return ()
+  , comCitrixXenclientXenmgrVmResume             = liftIO $ Xl.resumeFromSleep uuid >> return ()
   , comCitrixXenclientXenmgrVmSuspendToFile      = \f -> suspendToFile uuid f
   , comCitrixXenclientXenmgrVmResumeFromFile     = \f -> resumeFromFile uuid f False False
   , comCitrixXenclientXenmgrVmPause              = pauseVm uuid
@@ -591,10 +592,10 @@ implementationFor xm uuid = self where
   , comCitrixXenclientXenmgrVmSetProvidesDefaultNetworkBackend = restrict' $ setVmProvidesDefaultNetworkBackend uuid
   , comCitrixXenclientXenmgrVmUnrestrictedSetProvidesDefaultNetworkBackend = setVmProvidesDefaultNetworkBackend uuid
 
-  , comCitrixXenclientXenmgrVmGetVkbd = getVmVkbd uuid
-  , comCitrixXenclientXenmgrVmUnrestrictedGetVkbd = getVmVkbd uuid
-  , comCitrixXenclientXenmgrVmSetVkbd = restrict' $ setVmVkbd uuid
-  , comCitrixXenclientXenmgrVmUnrestrictedSetVkbd = setVmVkbd uuid
+  , comCitrixXenclientXenmgrVmGetVkbd = getVmVkb uuid
+  , comCitrixXenclientXenmgrVmUnrestrictedGetVkbd = getVmVkb uuid
+  , comCitrixXenclientXenmgrVmSetVkbd = restrict' $ setVmVkb uuid
+  , comCitrixXenclientXenmgrVmUnrestrictedSetVkbd = setVmVkb uuid
 
   , comCitrixXenclientXenmgrVmGetVfb = getVmVfb uuid
   , comCitrixXenclientXenmgrVmUnrestrictedGetVfb = getVmVfb uuid

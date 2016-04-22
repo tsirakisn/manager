@@ -103,7 +103,7 @@ module Vm.Actions
           , setVmDownloadProgress
           , setVmReady
           , setVmProvidesDefaultNetworkBackend
-          , setVmVkbd
+          , setVmVkb
           , setVmVfb
           , setVmV4V
           , setVmRestrictDisplayDepth
@@ -1035,7 +1035,7 @@ resumeS3AndWaitS0 :: Uuid -> Rpc ()
 resumeS3AndWaitS0 uuid = do
   acpi <- getVmAcpiState uuid
   when (acpi == 3) $ do
-    Xenvm.resumeFromSleep uuid
+    liftIO $ Xl.resumeFromSleep uuid
     done <- Xenvm.waitForAcpiState uuid 0 (Just 30)
     when (not done) $ warn $ "timeout waiting for S0 for " ++ show uuid
 
@@ -1571,6 +1571,7 @@ changeVmNicNetwork uuid nicid network = do
           -- notify xenvm TODO: maybe won't be necessary sometime?
           -- notify network daemon
           -- resynchronise vif state
+          info $ "====In ChangeVmNicNetwork====="
           Xenvm.connectVif uuid nicid False
           Xenvm.changeNicNetwork uuid nicid network
           whenDomainID_ uuid $ \domid -> joinNetwork network domid nicid
@@ -1797,7 +1798,7 @@ setVmDownloadProgress uuid v = do
   dbWrite ("/vm/"++show uuid++"/download-progress") (v::Int)
   notifyVmTransferChanged uuid  
 setVmReady uuid v = saveConfigProperty uuid vmReady (v::Bool)
-setVmVkbd uuid v = saveConfigProperty uuid vmVkbd (v::Bool)
+setVmVkb uuid v = saveConfigProperty uuid vmVkb (v::Bool)
 setVmVfb uuid v = saveConfigProperty uuid vmVfb (v::Bool)
 setVmV4V uuid v = saveConfigProperty uuid vmV4v (v::Bool)
 setVmRestrictDisplayDepth uuid v = saveConfigProperty uuid vmRestrictDisplayDepth (v::Bool)

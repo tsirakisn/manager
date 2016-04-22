@@ -200,7 +200,7 @@ powerlinkR xm get_shr =
                             liftRpc $ pmSetScreenRestoreVm (vm_uuid vm)
                             hostSleep
                             info $ "Power Link: resume " ++ show (vm_uuid vm)
-                            liftRpc (Xenvm.resumeFromSleep (vm_uuid vm))
+                            liftIO (Xl.resumeFromSleep (vm_uuid vm))
                             return ()
       shutdown vm      = do reason <- runVm vm get_shr
                             when ( reason == AcpiPoweroff ) $
@@ -322,7 +322,7 @@ whenControlsPlatformPState uuid act = getVmControlPlatformPowerState uuid >>= go
 
 maybeWake :: Vm Bool
 maybeWake = uuidRpc $ \uuid -> getVmAutoS3Wake uuid >>= wake uuid where
-    wake uuid True = Xenvm.resumeFromSleep uuid >> return True
+    wake uuid True = liftIO $ Xl.resumeFromSleep uuid >> return True
     wake _ _ = return False
 
 maybeKeepVmAlive :: Uuid -> XM Bool
@@ -352,7 +352,7 @@ maybeUpdateV4VHosts =
 updateEtcHosts :: String -> Vm ()
 updateEtcHosts tag = uuidRpc $ \uuid -> do
   running  <- isRunning uuid
-  domid    <- Xenvm.domainID uuid
+  domid    <- liftIO $ Xl.domainID uuid
   liftIO . withFile "/etc/hosts" ReadWriteMode $ \handle ->
       do str <- hGetContents' handle
          let contents = length str `seq` parse str

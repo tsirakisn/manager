@@ -66,7 +66,7 @@
     "hvm": "false",
     "apic": "true",
     "nx": "true",
-    "vkbd" : "'0','1'",
+    "vkb" : "true",
     "vfb" : "true",
     "v4v" : "true",
     "memory-min": "176",
