@@ -124,6 +124,7 @@ import Data.List
 import Data.Maybe
 import Data.Bits
 import Data.String
+import Data.Int
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as M
 import qualified Data.Set as Set
@@ -782,6 +783,7 @@ bootVm config
       xsp domid = "/local/domain/" ++ show domid
       xsp_dom0  = "/local/domain/0"
       v4vBack domid = "/backend/v4v/" ++ show domid ++ "/0"
+      vfbBack domid = "/backend/vfb/" ++ show domid ++ "/0"
       writable domid path = do
         xsWrite path ""
         xsSetPermissions path [ Permission 0 []
@@ -801,7 +803,6 @@ bootVm config
      
       --Write the xenstore nodes for the backend and the frontend for the v4v device
       --set states to Unknown and Initializing respectively, like xenvm used to do 
-      --setupV4VDevice :: Uuid -> IO ()
       setupV4VDevice uuid =
           whenDomainID_ uuid $ \domid -> liftIO $ do
             xsWrite (xsp domid ++ "/device/v4v/0/backend") ("/local/domain/0/backend/v4v/" ++ show domid ++ "/0")
@@ -812,12 +813,23 @@ bootVm config
             xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
             xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
 
-      --setupBiosStrings :: Uuid -> Rpc ()
+
       setupBiosStrings uuid =
           whenDomainID_ uuid $ \domid -> do
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-manufacturer") "OpenXT"
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-product") "OpenXT 5.0.0"
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-seamless-hint") "0"
+      
+      surfmanDbusCalls uuid = 
+          whenDomainID_ uuid $ \domid -> do 
+            rpcCallOnce (Xl.xlSurfmanDbus uuid "set_pv_display" [toVariant $ (read (show domid) :: Int32), toVariant $ ""])
+            rpcCallOnce (Xl.xlSurfmanDbus uuid "set_visible" [toVariant $ (read (show domid) :: Int32), toVariant $ (0 :: Int32), toVariant $ False])
+            return ()
+
+      inputDbusCalls uuid = 
+          whenDomainID_ uuid $ \domid -> do
+            rpcCallOnce (Xl.xlInputDbus uuid "attach_vkbd" [toVariant $ (read (show domid):: Int32) ])
+            return ()
 
       handleCreationPhases :: XM ()
       handleCreationPhases = do
@@ -845,6 +857,11 @@ bootVm config
           stubdom_memory <- getVmStubdomMemory uuid
           stubdom_cmdline <- getVmStubdomCmdline uuid
 
+          vfb_enabled <- getVmVfb uuid
+          when vfb_enabled $ surfmanDbusCalls uuid
+          
+          vkb_enabled <- getVmVkb uuid
+          when vkb_enabled $ inputDbusCalls uuid
           applyVmFirewallRules uuid
           -- notify that v4v rules have been set up, so xenvm can unpause stubdom
           whenDomainID_ uuid $ \domid -> liftIO $

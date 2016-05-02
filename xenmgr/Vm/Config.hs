@@ -811,7 +811,7 @@ miscSpecs cfg = do
           , ("hap"             , vmHap)
           --, ("vsnd"            , vmVsnd) -- Doesn't look like it's used
           , ("vkb"            , vmVkb) --Patch in xl to support creating the vkbd
-          --, ("vfb"             , vmVfb)  -- Don't care about this, maybe surfman cares...
+          , ("vfb"             , vmVfb)  -- Don't care about this, maybe surfman cares...
           --, ("passthrough-io"  , vmPassthroughIo)  --Both options appear unused
           --, ("passthrough-mmio", vmPassthroughMmio)
           --, ("startup"         , vmStartup)  --TODO: likely remove this
