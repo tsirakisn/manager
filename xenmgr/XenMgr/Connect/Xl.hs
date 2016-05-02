@@ -16,6 +16,8 @@ module XenMgr.Connect.Xl
     , isFocused
     , state
     , resumeFromSleep
+    , xlSurfmanDbus 
+    , xlInputDbus
     ) where
 
 import Control.Exception as E
@@ -175,6 +177,19 @@ xlcall uuid memb args =
     interface = fromString $ "xl.signal.notify"
     object = fromString $ "/xl/signal/notify"
 
+xlSurfmanDbus uuid memb args = 
+  RpcCall service object interface (fromString memb) args
+  where
+    service = fromString $ "com.citrix.xenclient.surfman"
+    interface = fromString $ "com.citrix.xenclient.surfman"
+    object = fromString $ "/"
+
+xlInputDbus uuid memb args = 
+  RpcCall service object interface (fromString memb) args
+  where
+    service = fromString $ "com.citrix.xenclient.input"
+    interface = fromString $ "com.citrix.xenclient.input"
+    object = fromString $ "/"
 
 configPath uuid = "/tmp/xenmgr-xl-" ++ show uuid
 

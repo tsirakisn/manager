@@ -50,14 +50,6 @@
     "kernel-extract": "\/boot\/bzImage",
     "flask-label": "system_u:system_r:ndvm_t",
     "pci": {
-      "0": {
-        "class": "0x0200",
-        "force-slot": "false"
-      },
-      "1": {
-        "class": "0x0280",
-        "force-slot": "false"
-      }
     },
     "disk": {
       "0": {
