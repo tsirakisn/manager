@@ -783,7 +783,7 @@ miscSpecs cfg = do
       sound = maybeToList . fmap (("soundhw='"++) <$> (++"'")) <$> readConfigProperty uuid vmSound
 
       stubdom | not (vmcfgStubdom cfg) = return []
-              | otherwise              = (\u -> ["stubdom="++show u]) <$> uuidGen
+              | otherwise              = return ["device_model_stubdomain_override=1"]
 
       usb_opts | not (vmcfgUsbEnabled cfg) = return ["usb=false"]
                | otherwise                 = return []
