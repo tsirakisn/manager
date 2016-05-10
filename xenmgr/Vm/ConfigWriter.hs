@@ -38,12 +38,16 @@ import Tools.Log
 writeXenvmConfig :: VmConfig -> Rpc ()
 writeXenvmConfig cfg = do
   config <- getXenvmConfig cfg
+  stubdom_config <- getStubdomConfig cfg
   let stringconfig = stringifyXenvmConfig config
+  let stringstubdom = stringifyXenvmConfig stubdom_config
 
   liftIO $ retry 10 (writeFile xenvmConfigPath stringconfig)
+  liftIO $ retry 10 (writeFile stubdomConfigPath stringstubdom)
   info $ "written xl config for " ++ show (vmcfgUuid cfg)
   where
     xenvmConfigDir  = "/tmp"
     xenvmConfigPath = joinPath [xenvmConfigDir, "xenmgr-xl-" ++ (show $ vmcfgUuid cfg)]
+    stubdomConfigPath = joinPath [xenvmConfigDir, "xenmgr-xl-" ++ (show $ vmcfgUuid cfg) ++ "-dm"]
     retry 0 _ = return ()
     retry n f = f `E.catch` \(err::IOError) -> threadDelay (10^5) >> retry (n-1) f

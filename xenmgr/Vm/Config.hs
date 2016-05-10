@@ -34,6 +34,7 @@ module Vm.Config (
 
                   -- Xenvm config out of database config
                 , getXenvmConfig
+                , getStubdomConfig
                 , stringifyXenvmConfig
 
                   -- list of interesting config properties
@@ -531,6 +532,28 @@ amtPtActive uuid = do
 
 stringifyXenvmConfig :: XenvmConfig -> String
 stringifyXenvmConfig (XenvmConfig params) = unlines params
+
+getStubdomConfig :: VmConfig -> Rpc XenvmConfig
+getStubdomConfig cfg =
+    fmap (XenvmConfig . concat) . mapM (force <=< future) $
+    [stubdom cfg]
+  where
+    uuid = vmcfgUuid cfg
+    stubdom cfg = do Just uuid <- readConfigProperty uuid vmUuidP :: Rpc (Maybe Uuid)
+                     name <- readConfigPropertyDef uuid vmName ""
+                     display <- readConfigPropertyDef uuid vmDisplay "none"                 
+                     return $ [ "name='" ++ name ++ "-dm'"
+                          --, "disk=['/usr/lib/xen/boot/stubdom-disk.img,raw,xvda,rw']"
+                          , "disk=['/storage/disks/fake-stubdom.vhd,vhd,xvda,rw']"
+                          , "builder='hvm'"
+                          , "memory=1024"
+                          , "vcpus=1"
+                          , "videoram=16"
+                          , "device_model_version='qemu-xen'"
+                          --, "device_model_stubdomain_override=1"
+                          --, "dm_display='none'"
+                          , "dm_display='dhqemu'"
+                          ]
 
 -- Gets a xenvm config, given domain ID of networking domain.
 getXenvmConfig :: VmConfig -> Rpc XenvmConfig
