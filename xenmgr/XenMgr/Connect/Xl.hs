@@ -34,6 +34,7 @@ import Tools.Log
 import System.Cmd
 import System.Process
 import XenMgr.Rpc
+import XenMgr.Db
 import qualified Data.Map as M
 
 type NotifyHandler = [String] -> Rpc ()
@@ -89,12 +90,21 @@ domainXsPath uuid = do
       "" -> return $ "/local/domain/unknown"
       _  -> return $ "/local/domain/" ++ show domid 
 
-shutdown :: Uuid -> IO ()
-shutdown uuid = do
+shutdown :: Uuid -> Bool -> IO ()
+shutdown uuid stubdom_enabled = do
     domid <- getDomainId uuid
-    exitCode <- system ("xl shutdown " ++ domid)
-    case exitCode of 
-      _ -> return ()
+    case stubdom_enabled of
+        True -> do 
+                   stubdomid <- fmap read <$> (liftIO $ xsRead $ "/xenmgr/vms/" ++ show uuid ++ "/stubdomid")
+                   case stubdomid of
+                      Just id ->  do _ <- system ("xl shutdown " ++ domid)
+                                     _ <- system ("xl shutdown " ++ id)
+                                     return ()
+                      Nothing ->  do _  <- system ("xl shutdown " ++ domid)
+                                     return ()
+                   return ()
+        False -> do _  <- system ("xl shutdown " ++ domid)
+                    return ()
 
 unpause :: Uuid -> IO ()
 unpause uuid = do
@@ -103,11 +113,15 @@ unpause uuid = do
     case exitCode of
       _ -> return ()
 
-start :: Uuid -> IO ()
-start uuid = do
-    exitCode <- system ("xl create " ++ configPath uuid ++ " -p")
-    case exitCode of
-      _ -> return ()
+start :: Uuid -> Bool -> IO ()
+start uuid stubdom_enabled  = do
+     case stubdom_enabled of
+        True  -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
+                    _  <- system ("xl create " ++ stubConfigPath uuid) 
+                    return ()
+        False -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
+                    return ()
+     return ()
 
 destroy :: Uuid -> IO ()
 destroy uuid = do 
@@ -192,6 +206,7 @@ xlInputDbus uuid memb args =
     object = fromString $ "/"
 
 configPath uuid = "/tmp/xenmgr-xl-" ++ show uuid
+stubConfigPath uuid = "/tmp/xenmgr-xl-" ++ show uuid ++ "-dm"
 
 isRunning :: (MonadRpc e m) => Uuid -> m Bool
 isRunning uuid = (not . (`elem` [Shutdown, Rebooted])) `fmap` (liftIO $ state uuid)
