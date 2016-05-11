@@ -90,21 +90,12 @@ domainXsPath uuid = do
       "" -> return $ "/local/domain/unknown"
       _  -> return $ "/local/domain/" ++ show domid 
 
-shutdown :: Uuid -> Bool -> IO ()
-shutdown uuid stubdom_enabled = do
-    domid <- getDomainId uuid
-    case stubdom_enabled of
-        True -> do 
-                   stubdomid <- fmap read <$> (liftIO $ xsRead $ "/xenmgr/vms/" ++ show uuid ++ "/stubdomid")
-                   case stubdomid of
-                      Just id ->  do _ <- system ("xl shutdown " ++ domid)
-                                     _ <- system ("xl shutdown " ++ id)
-                                     return ()
-                      Nothing ->  do _  <- system ("xl shutdown " ++ domid)
-                                     return ()
-                   return ()
-        False -> do _  <- system ("xl shutdown " ++ domid)
-                    return ()
+shutdown :: Uuid -> IO ()
+shutdown uuid = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl shutdown " ++ domid)
+      return ()
 
 unpause :: Uuid -> IO ()
 unpause uuid = do
@@ -113,15 +104,11 @@ unpause uuid = do
     case exitCode of
       _ -> return ()
 
-start :: Uuid -> Bool -> IO ()
-start uuid stubdom_enabled  = do
-     case stubdom_enabled of
-        True  -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
-                    _  <- system ("xl create " ++ stubConfigPath uuid) 
-                    return ()
-        False -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
-                    return ()
-     return ()
+start :: Uuid -> IO ()
+start uuid = 
+    do
+        _  <- system ("xl create " ++ configPath uuid ++ " -p")
+        return ()
 
 destroy :: Uuid -> IO ()
 destroy uuid = do 
