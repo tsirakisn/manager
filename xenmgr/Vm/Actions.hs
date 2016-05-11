@@ -770,7 +770,7 @@ bootVm config
                   then return False
                   else liftIO (doesFileExist suspend_file)
            if not exists
-                then do liftIO $ Xl.start uuid (vmcfgStubdom config)
+                then do liftIO $ Xl.start uuid
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
                         resumeFromFile uuid suspend_file False True
          return bootstrap
@@ -980,7 +980,6 @@ shutdownVm uuid = do
     info $ "shutting down VM " ++ show uuid
     acpi <- getVmAcpiState uuid
     use_agent <- RpcAgent.guestAgentRunning uuid
-    config <- getVmConfig uuid True
     -- if it is asleep, we need to wake it first
     when (acpi == 3) $ do
       info $ "resuming " ++ show uuid ++ " from S3 first.."
@@ -989,7 +988,7 @@ shutdownVm uuid = do
     if use_agent
        then RpcAgent.shutdown uuid
        --else Xenvm.shutdown uuid
-       else liftIO $ (Xl.shutdown uuid (vmcfgStubdom config))
+       else liftIO $ Xl.shutdown uuid
 
 canIssueVmShutdown :: Vm Bool
 canIssueVmShutdown = liftRpc . Xenvm.isXenvmUp =<< vmUuid
