@@ -966,14 +966,11 @@ rebootVm uuid = do
     -- Write XENVM configuration file
     writeXenvmConfig =<< getVmConfig uuid True
 
-    -- Ask xenvm kindly to reload it
-    Xenvm.readConfig uuid
-
     -- Request start from XENVM
     use_agent <- RpcAgent.guestAgentRunning uuid
     if use_agent
        then RpcAgent.reboot uuid
-       else Xenvm.reboot uuid
+       else liftiO $ Xl.reboot uuid
 
 shutdownVm :: Uuid -> Rpc ()
 shutdownVm uuid = do
@@ -987,7 +984,6 @@ shutdownVm uuid = do
       info $ "resuming " ++ show uuid ++ " from S3 DONE."
     if use_agent
        then RpcAgent.shutdown uuid
-       --else Xenvm.shutdown uuid
        else liftIO $ Xl.shutdown uuid
 
 canIssueVmShutdown :: Vm Bool
@@ -1011,12 +1007,12 @@ forceShutdownVmIfSafe = safe =<< canIssueVmShutdown where
 pauseVm :: Uuid -> Rpc ()
 pauseVm uuid = do
   info $ "pausing VM " ++ show uuid
-  Xenvm.pause uuid
+  liftIO $ Xl.pause uuid
 
 unpauseVm :: Uuid -> Rpc ()
 unpauseVm uuid = do
   info $ "unpausing VM " ++ show uuid
-  Xenvm.unpause uuid
+  liftIO $ Xl.unpause uuid
 
 assertPvAddons :: Uuid -> Rpc ()
 assertPvAddons uuid = getVmPvAddons uuid >>= \addons -> when (not addons) failActionRequiresPvAddons
@@ -1031,7 +1027,7 @@ sleepVm uuid = do
               if use_agent
                  then RpcAgent.sleep uuid
                  else do assertPvAddons uuid
-                         Xenvm.sleep uuid
+                         liftIO $ Xl.sleep uuid
 
 hibernateVm :: Uuid -> Rpc ()
 hibernateVm uuid = do
