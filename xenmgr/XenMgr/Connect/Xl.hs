@@ -2,20 +2,34 @@
 {-# LANGUAGE OverloadedStrings #-}
 module XenMgr.Connect.Xl
     (
-    --xl muscly stuff
+    --xl domain control
       start
+    , shutdown
+    , unpause
+    , pause
+    , destroy 
+    , resumeFromSleep
+    , reboot
+    , sleep
+    --,hibernate  (Xl doesn't support s4 at the moment?)
+    , suspendToFile
+    , resumeFromFile 
+    , changeCd
+    , setMemTarget
+    , acpiState
+    , waitForAcpiState
+
+    --xl/toolstack queries
     , domainID
     , domainXsPath
-    , shutdown
     , getDomainId
-    , unpause
-    , destroy 
-    , onNotify 
-    , onNotifyRemove
     , isRunning
     , isFocused
     , state
-    , resumeFromSleep
+
+    --dbus stuff
+    , onNotify 
+    , onNotifyRemove
     , xlSurfmanDbus 
     , xlInputDbus
     ) where
@@ -33,6 +47,7 @@ import Tools.XenStore
 import Tools.Log
 import System.Cmd
 import System.Process
+import System.Directory
 import XenMgr.Rpc
 import XenMgr.Db
 import qualified Data.Map as M
@@ -66,6 +81,17 @@ domainID uuid = do
     domid  <- getDomainId uuid
     return $ if domid == "" then Nothing else Just (read domid :: DomainID)
 
+waitForAcpiState :: Uuid -> Int -> Maybe Int -> IO Bool
+waitForAcpiState uuid expected timeout = do
+    s <- acpiState uuid
+    case  (s, timeout) of
+        (x, _)          | x == expected -> return True
+        (_, Just t)     | t <= 0        -> return False
+        (_, Just t)     | t > 0         -> do liftIO (threadDelay $ 10^6)
+                                              waitForAcpiState uuid expected (Just $ t-1)
+        (_, Nothing)                    -> liftIO (threadDelay $ 10^6) >> waitForAcpiState uuid expected Nothing
+        _                               -> error "impossible"
+
 acpiState :: Uuid -> IO AcpiState
 acpiState uuid = do 
     domid    <- getDomainId uuid
@@ -90,11 +116,25 @@ domainXsPath uuid = do
       "" -> return $ "/local/domain/unknown"
       _  -> return $ "/local/domain/" ++ show domid 
 
+reboot :: Uuid -> IO ()
+reboot uuid = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl reboot " ++ domid)
+      return ()
+
 shutdown :: Uuid -> IO ()
 shutdown uuid = 
     do
       domid <- getDomainId uuid
       _     <- system ("xl shutdown " ++ domid)
+      return ()
+
+pause :: Uuid -> IO ()
+pause uuid = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl pause " ++ domid)
       return ()
 
 unpause :: Uuid -> IO ()
@@ -117,6 +157,27 @@ destroy uuid = do
     case exitCode of
       _ -> return ()
 
+sleep :: Uuid -> IO ()
+sleep uuid = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl trigger " ++ domid ++ " sleep")
+      return ()
+
+suspendToFile :: Uuid -> FilePath -> IO ()
+suspendToFile uuid file = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl save " ++ domid ++ " " ++ file)
+      return ()
+
+resumeFromFile :: Uuid -> FilePath -> Bool -> Bool -> IO ()
+resumeFromFile uuid file delete paused = 
+    do
+      let p = if paused then "-p" else ""
+      _ <- system ("xl restore " ++ p ++ file)
+      if delete then removeFile file else return ()
+
 getDomainId :: Uuid -> IO String
 getDomainId uuid = do 
     domid <- readProcess "xl" ["uuid-to-domid", show uuid] []
@@ -124,6 +185,43 @@ getDomainId uuid = do
       "-1" -> return ("")
       _    -> return (domid)
 
+changeCd :: Uuid -> String -> IO ()
+changeCd uuid path = do
+    domid <- getDomainId uuid
+    _     <- system ("xl cd-insert " ++ domid ++ " hdc " ++ path)
+    return ()
+
+nicFrontendPath :: Uuid -> NicID -> IO (Maybe String)
+nicFrontendPath uuid (XbDeviceID nicid) =
+    do domainP <- domainXsPath uuid
+       vifs   <- liftIO . xsDir $ domainP ++ "/device/vif"
+       vwifs  <- liftIO . xsDir $ domainP ++ "/device/vwif"
+       let nicid_str = show nicid
+       case () of
+         _ | nicid_str `elem` vifs -> return $ Just (domainP ++ "/device/vif/" ++ nicid_str)
+           | nicid_str `elem` vwifs -> return $ Just (domainP ++ "/device/vwif" ++ nicid_str)
+           | otherwise -> return Nothing
+
+
+connectVif :: Uuid -> NicID -> Bool -> IO ()
+connectVif uuid nicid connect = do
+    domainP <- domainXsPath uuid
+    front   <- nicFrontendPath uuid nicid
+    case front of
+        Nothing -> warn $ "failed to lookup nic " ++ show nicid
+        Just fp -> do let p = fp ++ "/disconnect"
+                      liftIO $ xsWrite p value
+  where
+    value | connect == True         = "0"
+          | otherwise               = "1"
+
+--Adjust memory through the balloon driver, unreliable, requires correct
+--paravirt drivers.
+setMemTarget :: Uuid -> Int -> IO ()
+setMemTarget uuid mbs = do
+    domid <- getDomainId uuid
+    _     <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
+    return ()
 
 onNotify :: Uuid -> String -> NotifyHandler -> Rpc ()
 onNotify uuid msgname action =
