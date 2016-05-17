@@ -719,6 +719,22 @@ withPreCreationState uuid f =
                                when (s == PreCreate) $ do
                                  xmRunVm uuid $ vmEvalEvent (VmStateChange Shutdown)
                                throwError e)
+--Write the xenstore nodes for the backend and the frontend for the v4v device
+--set states to Unknown and Initializing respectively, like xenvm used to do 
+xsp domid = "/local/domain/" ++ show domid
+xsp_dom0  = "/local/domain/0"
+v4vBack domid = "/backend/v4v/" ++ show domid ++ "/0"
+vfbBack domid = "/backend/vfb/" ++ show domid ++ "/0"
+
+setupV4VDevice uuid =
+  whenDomainID_ uuid $ \domid -> liftIO $ do
+    xsWrite (xsp domid ++ "/device/v4v/0/backend") ("/local/domain/0/backend/v4v/" ++ show domid ++ "/0")
+    xsWrite (xsp domid ++ "/device/v4v/0/backend-id") "0"
+    xsWrite (xsp domid ++ "/device/v4v/0/state") "1"
+
+    xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
+    xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
+    xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
      
 bootVm :: VmConfig -> XM ()
 bootVm config
@@ -780,10 +796,6 @@ bootVm config
        force bootstrap
        force phases
 
-      xsp domid = "/local/domain/" ++ show domid
-      xsp_dom0  = "/local/domain/0"
-      v4vBack domid = "/backend/v4v/" ++ show domid ++ "/0"
-      vfbBack domid = "/backend/vfb/" ++ show domid ++ "/0"
       writable domid path = do
         xsWrite path ""
         xsSetPermissions path [ Permission 0 []
@@ -801,19 +813,6 @@ bootVm config
           liftIO $
             mapM_ updateCdDeviceMediaStatusKey =<< liftIO getHostBSGDevices
      
-      --Write the xenstore nodes for the backend and the frontend for the v4v device
-      --set states to Unknown and Initializing respectively, like xenvm used to do 
-      setupV4VDevice uuid =
-          whenDomainID_ uuid $ \domid -> liftIO $ do
-            xsWrite (xsp domid ++ "/device/v4v/0/backend") ("/local/domain/0/backend/v4v/" ++ show domid ++ "/0")
-            xsWrite (xsp domid ++ "/device/v4v/0/backend-id") "0"
-            xsWrite (xsp domid ++ "/device/v4v/0/state") "1"
-
-            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
-            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
-            xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
-
-
       setupBiosStrings uuid =
           whenDomainID_ uuid $ \domid -> do
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-manufacturer") "OpenXT"
@@ -833,7 +832,7 @@ bootVm config
 
       handleCreationPhases :: XM ()
       handleCreationPhases = do
-        waitForVmInternalState uuid CreatingDevices 30
+        waitForVmInternalState uuid Created 30
          
         -- BEFORE DEVICE MODEL
         info $ "pre-dm setup for " ++ show uuid
@@ -967,10 +966,11 @@ rebootVm uuid = do
     writeXenvmConfig =<< getVmConfig uuid True
 
     -- Request start from XENVM
-    use_agent <- RpcAgent.guestAgentRunning uuid
-    if use_agent
-       then RpcAgent.reboot uuid
-       else liftiO $ Xl.reboot uuid
+    --use_agent <- RpcAgent.guestAgentRunning uuid
+    --if use_agent
+    --   then RpcAgent.reboot uuid
+    --   else liftIO $ Xl.reboot uuid
+    liftIO $ Xl.reboot uuid
 
 shutdownVm :: Uuid -> Rpc ()
 shutdownVm uuid = do
