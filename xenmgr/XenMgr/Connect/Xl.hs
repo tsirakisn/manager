@@ -45,6 +45,7 @@ import Vm.State
 import Tools.Misc
 import Tools.XenStore
 import Tools.Log
+import System
 import System.Cmd
 import System.Process
 import System.Directory
@@ -120,15 +121,21 @@ reboot :: Uuid -> IO ()
 reboot uuid = 
     do
       domid <- getDomainId uuid
-      _     <- system ("xl reboot " ++ domid)
-      return ()
+      exitCode <- system ("xl reboot " ++ domid)
+      case exitCode of
+        ExitSuccess   -> return ()
+        _             -> do _ <- system ("xl reboot -F " ++ domid)
+                            return ()
 
 shutdown :: Uuid -> IO ()
 shutdown uuid = 
     do
       domid <- getDomainId uuid
-      _     <- system ("xl shutdown " ++ domid)
-      return ()
+      exitCode  <- system ("xl shutdown " ++ domid)
+      case exitCode of
+        ExitSuccess   -> return ()
+        _             -> do _ <- system ("xl shutdown -F " ++ domid)
+                            return ()
 
 pause :: Uuid -> IO ()
 pause uuid = 
@@ -147,8 +154,11 @@ unpause uuid = do
 start :: Uuid -> IO ()
 start uuid = 
     do
-        _  <- system ("xl create " ++ configPath uuid ++ " -p")
-        return ()
+        state <- state uuid
+        case state of
+            Shutdown -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
+                           return ()
+            _ -> do return ()
 
 destroy :: Uuid -> IO ()
 destroy uuid = do 

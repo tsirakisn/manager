@@ -499,61 +499,61 @@ startVmInternal uuid = do
     liftRpc $ maybePtGpuFuncs uuid
     config <- prepareAndCheckConfig uuid
     case config of
-      Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
-      --Just c -> info ("done checks for VM " ++ show uuid) >> Xl.start uuid
-      Nothing-> return ()
-  where
+        Just c -> info ("done checks for VM " ++ show uuid) >> bootVm c
+        --Just c -> info ("done checks for VM " ++ show uuid) >> Xl.start uuid
+        Nothing-> return ()
+    where
 
-  --Based on bdf get all functions on that device bus:device.function
-  --and pass them through to vm in case of bus level reset.
-    maybePtGpuFuncs uuid = do
-      ok <- isGpuPt uuid
-      if ok
-        then do
-          gfxbdf <- getVmGpu uuid
-          devices <- liftIO pciGetDevices
-          let devMatches = filter (bdFilter (take 7 gfxbdf) gfxbdf) devices in
-              mapM_ (add_pt_rule_bdf uuid) devMatches
-        else return ()
+      --Based on bdf get all functions on that device bus:device.function
+      --and pass them through to vm in case of bus level reset.
+        maybePtGpuFuncs uuid = do
+          ok <- isGpuPt uuid
+          if ok
+            then do
+              gfxbdf <- getVmGpu uuid
+              devices <- liftIO pciGetDevices
+              let devMatches = filter (bdFilter (take 7 gfxbdf) gfxbdf) devices in
+                  mapM_ (add_pt_rule_bdf uuid) devMatches
+            else return ()
 
-    --Filter function to match on domain:bus and also filter out the video function
-    bdFilter match bdf d = (isInfixOf match (show (devAddr d))) && (bdf /= (show (devAddr d))) 
+        --Filter function to match on domain:bus and also filter out the video function
+        bdFilter match bdf d = (isInfixOf match (show (devAddr d))) && (bdf /= (show (devAddr d))) 
 
-    --Check if vm has a bdf in gpu
-    isGpuPt uuid = do
-        gpu <- getVmGpu uuid
-        return (gpu /= "" && gpu /= "hdx")
+        --Check if vm has a bdf in gpu
+        isGpuPt uuid = do
+            gpu <- getVmGpu uuid
+            return (gpu /= "" && gpu /= "hdx")
 
-    prepareAndCheckConfig uuid = do
-      ok <- stage1 -- early tests / dependency startup
-      if (not ok)
-         then return Nothing
-         else do
-           -- this (config gather) needs to be done after dependency startup to get correct
-           -- backend domids
-           config <- liftRpc $ getVmConfig uuid True
-           info $ "gathered config for VM " ++ show uuid
-           ok <- stage2 config
-           if ok then return (Just config) else return Nothing
+        prepareAndCheckConfig uuid = do
+          ok <- stage1 -- early tests / dependency startup
+          if (not ok)
+             then return Nothing
+             else do
+               -- this (config gather) needs to be done after dependency startup to get correct
+               -- backend domids
+               config <- liftRpc $ getVmConfig uuid True
+               info $ "gathered config for VM " ++ show uuid
+               ok <- stage2 config
+               if ok then return (Just config) else return Nothing
 
-    stage1
-      = startupCheckVmState uuid
-          `followby` startupCheckHostStates uuid
-          `followby` startupDependencies uuid
-          `followby` startupExtractKernel uuid
-          `followby` startupMeasureVm uuid
-    stage2 config
-      = startupCheckNics config
-          `followby` startupCheckGraphicsConstraints config
-          `followby` startupCheckIntelConstraints config
-          `followby` startupCheckAMTConstraints config
-          `followby` startupCheckPCI config
-          `followby` startupCheckOemFeatures config
-          `followby` startupCheckSyncXTComfortable uuid
+        stage1
+          = startupCheckVmState uuid
+              `followby` startupCheckHostStates uuid
+              `followby` startupDependencies uuid
+              `followby` startupExtractKernel uuid
+              `followby` startupMeasureVm uuid
+        stage2 config
+          = startupCheckNics config
+              `followby` startupCheckGraphicsConstraints config
+              `followby` startupCheckIntelConstraints config
+              `followby` startupCheckAMTConstraints config
+              `followby` startupCheckPCI config
+              `followby` startupCheckOemFeatures config
+              `followby` startupCheckSyncXTComfortable uuid
 
-    followby f g =
-      do ok <- f
-         if ok then g else return False
+        followby f g =
+          do ok <- f
+             if ok then g else return False
 
 startupCheckVmState :: Uuid -> XM Bool
 startupCheckVmState uuid
@@ -710,8 +710,7 @@ startupCheckSyncXTComfortable uuid
 
 withPreCreationState :: Uuid -> XM a -> XM a
 withPreCreationState uuid f =
-  do s <- getVmInternalState uuid
-     when (s /= PreCreate) $ xmRunVm uuid $ vmEvalEvent (VmStateChange PreCreate)
+  do
      f `catchError` (\e -> do
                                s <- getVmInternalState uuid
                                -- have to mop up here if something went wrong in pre-create state
@@ -792,7 +791,7 @@ bootVm config
                 then do liftIO $ Xl.start uuid
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
                         resumeFromFile uuid suspend_file False True
-         return bootstrap
+         return bootstrap 
        -- fork vm creation phase handling in the background
        phases <- future handleCreationPhases
        -- ensure bootstrap and phase handling synchronously terminates before returning (and errors get propagated)

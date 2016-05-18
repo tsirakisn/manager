@@ -296,7 +296,7 @@ whenRebooted xm = do
     p <- uuidRpc getVmPreserveOnReboot
     -- do not destroy/restart vm if preserve on reboot flag is set
     when (not p) $ do
-      uuidIO Xl.destroy
+      --uuidIO Xl.destroy
       uuidRpc unapplyVmFirewallRules
       liftIO $ removeVmEnvIso uuid
       uuidRpc (backgroundRpc . runXM xm . startVm)
