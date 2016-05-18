@@ -529,7 +529,7 @@ getGuestVms =
 
 getRunningHDX :: Rpc [Uuid]
 getRunningHDX = do
-    filterM isRunning =<< getVmsBy isHDX
+    filterM  isRunning =<< getVmsBy isHDX
     where
       isHDX uuid = getVmGraphics uuid >>= return . (== HDX)
 
