@@ -778,6 +778,9 @@ bootVm config
 
          -- run custom pre boot action
          liftRpc $ runEventScript HardFail uuid getVmRunPreBoot [uuidStr uuid]
+         -- bind any passthrough devices to pciback if possible
+         liftRpc $ bindVmPcis uuid
+
          -- fork xenvm vm startup in the background
          bootstrap <- future $ liftRpc $ do
            suspend_file <- getVmStartFromSuspendImage uuid
