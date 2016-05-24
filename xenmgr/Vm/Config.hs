@@ -552,7 +552,7 @@ getXenvmConfig cfg =
                                    False -> "generic"
                  let builder = ["builder='" ++ buildType ++ "'"] 
                  let dm_args = case hvm of
-                                 True  -> ["device_model_verison='qemu-xen'"]
+                                 True  -> ["device_model_version='qemu-xen'"]
                                  False -> []
 
                  return $ [ "uuid='" ++ (show uuid) ++ "'"
