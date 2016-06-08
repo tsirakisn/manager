@@ -36,7 +36,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Text.Printf
 import Vm.Types
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import Tools.XenStore
 import XenMgr.Db

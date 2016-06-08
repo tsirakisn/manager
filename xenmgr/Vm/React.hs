@@ -59,7 +59,6 @@ import XenMgr.PowerManagement
 import XenMgr.XM
 import XenMgr.CdLock
 
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import Rpc.Autogen.NetworkDaemonClient
 import Rpc.Autogen.CtxusbDaemonClient
@@ -193,7 +192,7 @@ powerlinkR xm get_shr =
                             liftRpc $ pmSetScreenRestoreVm (vm_uuid vm)
                             -- make sure the vm's hibernation is actually done as we receive acpi state change notifications
                             -- slightly before domain gets destroyed
-                            done <- liftRpc $ Xenvm.waitForState (vm_uuid vm) Shutdown (Just 60)
+                            done <- liftIO $ Xl.waitForState (vm_uuid vm) Shutdown (Just 60)
                             when (not done) $ warn ("Power Link: VM " ++ show (vm_uuid vm) ++ " is still running, but should be hibernated!")
                             hostHibernate
       sleep vm         = do info "Power Link: sleep"

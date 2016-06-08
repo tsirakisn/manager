@@ -73,7 +73,6 @@ import Vm.Queries
 import Vm.State
 import XenMgr.Rpc
 import Rpc.Autogen.SurfmanClient
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import XenMgr.Connect.InputDaemon
 
