@@ -18,6 +18,7 @@ module XenMgr.Connect.Xl
     , setMemTarget
     , acpiState
     , waitForAcpiState
+    , waitForState
 
     --xl/toolstack queries
     , domainID
@@ -32,6 +33,7 @@ module XenMgr.Connect.Xl
     , onNotifyRemove
     , xlSurfmanDbus 
     , xlInputDbus
+    , setNicBackendDom
     ) where
 
 import Control.Exception as E
@@ -231,6 +233,14 @@ setMemTarget :: Uuid -> Int -> IO ()
 setMemTarget uuid mbs = do
     domid <- getDomainId uuid
     _     <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
+    return ()
+
+
+setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
+setNicBackendDom uuid nic back_domid = do
+    domid <- getDomainId uuid
+    _  <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
+    _  <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
     return ()
 
 onNotify :: Uuid -> String -> NotifyHandler -> Rpc ()

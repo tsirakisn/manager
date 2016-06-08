@@ -235,7 +235,7 @@ startServiceVm uuid = xmContext >>= \xm -> liftRpc $
                   info $ "service vm " ++ show uuid ++ " requested a memory image snapshot"
                   -- take a vm snapshot
                   info $ "taking memory image snapshot for service vm " ++ show uuid
-                  suspendToFile uuid file
+                  liftIO $ Xl.suspendToFile uuid file
                   info $ "DONE taking memory image snapshot for service vm " ++ show uuid
                   liftIO $ xsWrite (vmSuspendImageStatePath uuid) "snapshot-done"
                   -- double start, TODO: maybe wont be necessary
@@ -782,7 +782,7 @@ bootVm config
            if not exists
                 then do liftIO $ Xl.start uuid
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
-                        resumeFromFile uuid suspend_file False True
+                        liftIO $ Xl.resumeFromFile uuid suspend_file False True
          return bootstrap 
        -- fork vm creation phase handling in the background
        phases <- future handleCreationPhases
