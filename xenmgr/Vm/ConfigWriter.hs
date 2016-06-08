@@ -31,7 +31,6 @@ import Vm.Types
 import Vm.Queries
 import Vm.Config
 import XenMgr.Config
-import XenMgr.Connect.Xenvm
 import Tools.Log
 
 -- Write a XENVM configuration file for VM

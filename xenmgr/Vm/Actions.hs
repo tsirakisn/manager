@@ -30,9 +30,7 @@ module Vm.Actions
           , resumeFromSleep
           , hibernateVm
           , shutdownVm
-          , shutdownVmIfSafe
           , forceShutdownVm
-          , forceShutdownVmIfSafe
           , pauseVm
           , unpauseVm
           , switchVm
@@ -177,11 +175,9 @@ import {-# SOURCE #-} Vm.React
 import qualified Vm.V4VFirewall as Firewall
 import Vm.Balloon
 import XenMgr.Rpc
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import qualified XenMgr.Connect.GuestRpcAgent as RpcAgent
 import XenMgr.Connect.NetworkDaemon
-import XenMgr.Connect.Xenvm ( resumeFromSleep, resumeFromFile, suspendToFile )
 import XenMgr.Connect.InputDaemon
 import XenMgr.Config
 import XenMgr.Errors
@@ -450,7 +446,6 @@ removeVm uuid =
        -- Need to quit xenvm
        -- FIXME: cleanly stop monitoring events
        removeDefaultEvents uuid	--cleanly...stop monitoring events
-       Xenvm.quitXenvm uuid
        notifyVmDeleted uuid
   where
     removeVhds  = Data.Foldable.mapM_ (removeDiskFiles uuid) =<< getDisks uuid
@@ -737,11 +732,8 @@ setupV4VDevice uuid =
      
 bootVm :: VmConfig -> XM ()
 bootVm config
-  = do -- fire xenvm up if necessary, send configuration to xenvm
+  = do 
        monitor <- vm_monitor <$> xmRunVm uuid vmContext
-       --liftRpc $ do
-       --  whenM (not <$> ensureXenvm monitor config) $ do -- starts xenvm + writes config if not up
-           -- xenvm was already up, need to send it new config
        liftRpc $ updateXVConfig config
 
        withPreCreationState uuid create
@@ -957,7 +949,7 @@ disconnectFrontVifs back_uuid =
       disconnect (front_uuid, dev) = do
           let nid@(XbDeviceID nic_id) = dmfID dev
           info $ "disconnecting nic uuid=" ++ show front_uuid ++ " id=" ++ show nic_id
-          Xenvm.connectVif front_uuid nid False
+          liftIO $ Xl.connectVif front_uuid nid False
 
 
 -- Reboot a VM
@@ -988,23 +980,10 @@ shutdownVm uuid = do
        then RpcAgent.shutdown uuid
        else liftIO $ Xl.shutdown uuid
 
-canIssueVmShutdown :: Vm Bool
-canIssueVmShutdown = liftRpc . Xenvm.isXenvmUp =<< vmUuid
-
-shutdownVmIfSafe :: Vm ()
-shutdownVmIfSafe = safe =<< canIssueVmShutdown where
-    --safe False = vmUuid >>= \uuid -> warn $ "ignoring request to shutdown VM " ++ show uuid
-    safe _     = liftRpc . shutdownVm =<< vmUuid
-
 forceShutdownVm :: Uuid -> Rpc ()
 forceShutdownVm uuid = do
     info $ "forcibly shutting down VM " ++ show uuid
     liftIO $ Xl.destroy uuid
-
-forceShutdownVmIfSafe :: Vm ()
-forceShutdownVmIfSafe = safe =<< canIssueVmShutdown where
-    --safe False = vmUuid >>= \uuid -> warn $ "ignoring request to forcibly shutdown VM " ++ show uuid
-    safe _     = liftRpc . forceShutdownVm =<< vmUuid
 
 pauseVm :: Uuid -> Rpc ()
 pauseVm uuid = do
@@ -1043,7 +1022,7 @@ hibernateVm uuid = do
       when (acpi == 3) $ resumeS3AndWaitS0 uuid
       if use_agent
          then RpcAgent.hibernate uuid
-         else Xenvm.hibernate uuid
+         else Xl.hibernate uuid
       saveConfigProperty uuid vmHibernated True
 
 resumeS3AndWaitS0 :: Uuid -> Rpc ()
@@ -1051,7 +1030,7 @@ resumeS3AndWaitS0 uuid = do
   acpi <- getVmAcpiState uuid
   when (acpi == 3) $ do
     liftIO $ Xl.resumeFromSleep uuid
-    done <- Xenvm.waitForAcpiState uuid 0 (Just 30)
+    done <- Xl.waitForAcpiState uuid 0 (Just 30)
     when (not done) $ warn $ "timeout waiting for S0 for " ++ show uuid
 
 
@@ -1587,8 +1566,8 @@ changeVmNicNetwork uuid nicid network = do
           -- notify network daemon
           -- resynchronise vif state
           info $ "====In ChangeVmNicNetwork====="
-          Xenvm.connectVif uuid nicid False
-          Xenvm.changeNicNetwork uuid nicid network
+          Xl.connectVif uuid nicid False
+          Xl.changeNicNetwork uuid nicid network
           whenDomainID_ uuid $ \domid -> joinNetwork network domid nicid
 -- Property accessors
 ---------------------
@@ -1638,7 +1617,7 @@ setVmCd uuid str =
                      | otherwise          = do isos <- appIsoPath
                                                let path = isos ++ "/" ++ name
                                                -- hot swap cd
-                                               whenVmRunning uuid (Xenvm.changeCd uuid path)
+                                               whenVmRunning uuid (Xl.changeCd uuid path)
                                                return $ disk { diskPath = path }
     name | str == ""   = "null.iso"
          | otherwise   = str

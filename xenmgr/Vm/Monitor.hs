@@ -25,7 +25,6 @@ module Vm.Monitor
     , submitVmEvent
     , evalVmEvent
     , newVmMonitor
-    , ensureXenvm
     , getMonitorError
     , vmStateWatch
     )
@@ -49,7 +48,6 @@ import Vm.Types
 import Vm.State (stateFromStr)
 import Vm.Queries
 import Vm.ConfigWriter
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import qualified XenMgr.Connect.GuestRpcAgent as RpcAgent
 import XenMgr.Rpc
@@ -134,10 +132,9 @@ submitVmEvent m e = liftIO $ (vmm_submit m) e
 
 insertDefaultEvents :: VmMonitor -> Rpc ()
 insertDefaultEvents m = let uuid = vmm_uuid m in do
-    Xenvm.onNotify uuid "rtc" whenRtc
-    --Xenvm.onNotify uuid "vm" whenVm
+    Xl.onNotify uuid "rtc" whenRtc
     Xl.onNotify uuid "vm" whenVm
-    Xenvm.onNotify uuid "power-state" whenPowerState
+    Xl.onNotify uuid "power-state" whenPowerState
     RpcAgent.onAgentStarted uuid (submit VmRpcAgentStart)
     RpcAgent.onAgentUninstalled uuid (submit VmRpcAgentStop)
 
@@ -164,10 +161,9 @@ insertDefaultEvents m = let uuid = vmm_uuid m in do
 --Chain some calls to eventually invoke removeMatch
 removeDefaultEvents :: Uuid -> Rpc ()
 removeDefaultEvents uuid = do
-    Xenvm.onNotifyRemove uuid "rtc" whenRtc
-    --Xenvm.onNotifyRemove uuid "vm" whenVm
+    Xl.onNotifyRemove uuid "rtc" whenRtc
     Xl.onNotifyRemove uuid "vm" whenVm
-    Xenvm.onNotifyRemove uuid "power-state" whenPowerState
+    Xl.onNotifyRemove uuid "power-state" whenPowerState
 
     --Need to undo the onAgent stuff to remove match rules
     RpcAgent.onAgentStartedRemove uuid (submit VmRpcAgentStart)
@@ -197,20 +193,6 @@ insertWatchEvents m watches = do
 evloop :: VmMonitor -> Rpc ()
 evloop m = mapM_ process =<< liftIO (vmm_events m) where
     process e = evalVmEvent m e
-
--- make sure xenvm instance is up
-ensureXenvm :: VmMonitor -> VmConfig -> Rpc Bool
-ensureXenvm m cfg =
-    do up <- Xenvm.isXenvmUp uuid
-       if (not up) then do
-           info $ "starting xenvm instance for " ++ show uuid
-           writeXenvmConfig cfg
-           Xenvm.forkXenvm uuid
-           return True
-         else
-           return False
-    where
-      uuid = vmm_uuid m
 
 data VmWatch = VmWatch { watch_path   :: String
                        , watch_action :: IO ()

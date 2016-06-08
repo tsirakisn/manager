@@ -53,7 +53,6 @@ import Vm.State
 import Vm.ProductProperty
 
 import qualified Vm.V4VFirewall as Firewall
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import XenMgr.Errors
 import qualified XenMgr.Expose.VmDiskObject as VmDiskObj
@@ -106,8 +105,8 @@ implementationFor xm uuid = self where
   , comCitrixXenclientXenmgrVmStart              = runXM xm (startVm uuid) >> return ()
   , comCitrixXenclientXenmgrVmStartInternal      = runXM xm (startVmInternal uuid) >> return ()
   , comCitrixXenclientXenmgrVmReboot             = rebootVm uuid
-  , comCitrixXenclientXenmgrVmShutdown           = runvm shutdownVmIfSafe
-  , comCitrixXenclientXenmgrVmDestroy            = runvm forceShutdownVmIfSafe
+  , comCitrixXenclientXenmgrVmShutdown           = runvm shutdownVm
+  , comCitrixXenclientXenmgrVmDestroy            = runvm forceShutdown
   , comCitrixXenclientXenmgrVmSleep              = sleepVm uuid
   , comCitrixXenclientXenmgrVmHibernate          = hibernateVm uuid
   , comCitrixXenclientXenmgrVmResume             = liftIO $ Xl.resumeFromSleep uuid >> return ()

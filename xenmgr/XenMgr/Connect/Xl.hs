@@ -315,3 +315,22 @@ state uuid =
                           info $ "active vms, state = " ++ show state
                           return $ stateFromStr state
           Nothing    -> return $ stateFromStr "shutdown"
+
+
+waitForState :: Uuid -> VmState -> Maybe Int -> IO Bool
+waitForState uuid expected timeout = do
+    s <- state uuid
+    case (s, timeout) of
+      -- got right state, exit
+      (x, _)       | x == expected -> return True
+
+      -- we timed out while waiting for state
+      (_, Just t)  | t <= 0        -> return False
+
+      -- we continue waiting with lesser timeout
+      (_, Just t)  | t >  0        -> do (threadDelay $ 10^6)
+                                         waitForState uuid expected (Just $ t-1)
+
+      -- we have no timeout, wait indifinitely
+      (_, Nothing)                 -> (threadDelay $ 10^6) >> waitForState uuid expected Nothing
+      _                            -> error "impossible"

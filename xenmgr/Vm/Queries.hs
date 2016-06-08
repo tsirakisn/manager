@@ -166,7 +166,6 @@ import XenMgr.Config
 import XenMgr.Errors
 import XenMgr.Host
 import XenMgr.Connect.Xl (isRunning)
-import qualified XenMgr.Connect.Xenvm as Xenvm
 import qualified XenMgr.Connect.Xl as Xl
 import Rpc.Autogen.SurfmanClient
 
@@ -562,9 +561,9 @@ getVmAcpiState uuid = do
                         else (
                           if not running
                              then return 5
-                             else Xenvm.acpiState uuid
+                             else liftIO $ Xl.acpiState uuid
                              )
-    deriveFrom <$> Xenvm.state uuid
+    deriveFrom <$> (liftIO $ Xl.state uuid)
                <*> return ll_acpi_state
                <*> readConfigPropertyDef uuid vmHibernated False
   where
