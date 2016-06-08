@@ -144,4 +144,4 @@ moveBackend t frontdomid id backdomid = do
       moveNIC dev =
           do info $ printf "moving NIC (%s) backend to domid=%d" (show dev) backdomid
              uuid <- fromMaybe (error "failed to get domain UUID") <$> getDomainUuid frontdomid
-             Xl.setNicBackendDom uuid id backdomid
+             liftIO $ Xl.setNicBackendDom uuid id backdomid

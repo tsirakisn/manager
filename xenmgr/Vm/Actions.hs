@@ -30,7 +30,9 @@ module Vm.Actions
           , resumeFromSleep
           , hibernateVm
           , shutdownVm
+          , invokeShutdownVm
           , forceShutdownVm
+          , invokeForceShutdownVm
           , pauseVm
           , unpauseVm
           , switchVm
@@ -177,6 +179,7 @@ import Vm.Balloon
 import XenMgr.Rpc
 import qualified XenMgr.Connect.Xl as Xl
 import qualified XenMgr.Connect.GuestRpcAgent as RpcAgent
+import XenMgr.Connect.Xl ( resumeFromSleep, resumeFromFile, suspendToFile )
 import XenMgr.Connect.NetworkDaemon
 import XenMgr.Connect.InputDaemon
 import XenMgr.Config
@@ -235,7 +238,7 @@ startServiceVm uuid = xmContext >>= \xm -> liftRpc $
                   info $ "service vm " ++ show uuid ++ " requested a memory image snapshot"
                   -- take a vm snapshot
                   info $ "taking memory image snapshot for service vm " ++ show uuid
-                  suspendToFile uuid file
+                  liftIO $ Xl.suspendToFile uuid file
                   info $ "DONE taking memory image snapshot for service vm " ++ show uuid
                   liftIO $ xsWrite (vmSuspendImageStatePath uuid) "snapshot-done"
                   -- double start, TODO: maybe wont be necessary
@@ -782,7 +785,7 @@ bootVm config
            if not exists
                 then do liftIO $ Xl.start uuid
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
-                        resumeFromFile uuid suspend_file False True
+                        liftIO $ Xl.resumeFromFile uuid suspend_file False True
          return bootstrap 
        -- fork vm creation phase handling in the background
        phases <- future handleCreationPhases
@@ -985,6 +988,12 @@ forceShutdownVm uuid = do
     info $ "forcibly shutting down VM " ++ show uuid
     liftIO $ Xl.destroy uuid
 
+invokeShutdownVm :: Vm ()
+invokeShutdownVm = liftRpc . shutdownVm =<< vmUuid
+
+invokeForceShutdownVm :: Vm ()
+invokeForceShutdownVm = liftRpc . forceShutdownVm =<< vmUuid
+
 pauseVm :: Uuid -> Rpc ()
 pauseVm uuid = do
   info $ "pausing VM " ++ show uuid
@@ -1022,7 +1031,7 @@ hibernateVm uuid = do
       when (acpi == 3) $ resumeS3AndWaitS0 uuid
       if use_agent
          then RpcAgent.hibernate uuid
-         else Xl.hibernate uuid
+         else liftIO $ Xl.hibernate uuid
       saveConfigProperty uuid vmHibernated True
 
 resumeS3AndWaitS0 :: Uuid -> Rpc ()
@@ -1030,9 +1039,8 @@ resumeS3AndWaitS0 uuid = do
   acpi <- getVmAcpiState uuid
   when (acpi == 3) $ do
     liftIO $ Xl.resumeFromSleep uuid
-    done <- Xl.waitForAcpiState uuid 0 (Just 30)
+    done <- liftIO $ Xl.waitForAcpiState uuid 0 (Just 30)
     when (not done) $ warn $ "timeout waiting for S0 for " ++ show uuid
-
 
 -- Execute action in parallel for each of given VM, returns results of actions. If any action
 -- fails, we report an error through exception
@@ -1566,8 +1574,8 @@ changeVmNicNetwork uuid nicid network = do
           -- notify network daemon
           -- resynchronise vif state
           info $ "====In ChangeVmNicNetwork====="
-          Xl.connectVif uuid nicid False
-          Xl.changeNicNetwork uuid nicid network
+          liftIO $ Xl.connectVif uuid nicid False
+          liftIO $ Xl.changeNicNetwork uuid nicid network
           whenDomainID_ uuid $ \domid -> joinNetwork network domid nicid
 -- Property accessors
 ---------------------
@@ -1617,7 +1625,7 @@ setVmCd uuid str =
                      | otherwise          = do isos <- appIsoPath
                                                let path = isos ++ "/" ++ name
                                                -- hot swap cd
-                                               whenVmRunning uuid (Xl.changeCd uuid path)
+                                               whenVmRunning uuid (liftIO $ Xl.changeCd uuid path)
                                                return $ disk { diskPath = path }
     name | str == ""   = "null.iso"
          | otherwise   = str

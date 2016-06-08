@@ -240,7 +240,7 @@ pmShutdownVms force = do
                        | otherwise = do
       acpi <- getVmAcpiState uuid
       when (acpi == 3) $
-           do resumed <- resumeFromSleep uuid
+           do resumed <- liftIO $ resumeFromSleep uuid
               when (not resumed) $ failResumeFromSleep
       running <- isRunning uuid
       when running $

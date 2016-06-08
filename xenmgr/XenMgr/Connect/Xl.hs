@@ -11,13 +11,14 @@ module XenMgr.Connect.Xl
     , resumeFromSleep
     , reboot
     , sleep
-    --,hibernate  (Xl doesn't support s4 at the moment?)
+    , hibernate
     , suspendToFile
     , resumeFromFile 
     , changeCd
     , setMemTarget
     , acpiState
     , waitForAcpiState
+    , waitForState
 
     --xl/toolstack queries
     , domainID
@@ -32,6 +33,9 @@ module XenMgr.Connect.Xl
     , onNotifyRemove
     , xlSurfmanDbus 
     , xlInputDbus
+    , setNicBackendDom
+    , connectVif
+    , changeNicNetwork
     ) where
 
 import Control.Exception as E
@@ -40,9 +44,11 @@ import Control.Monad
 import Control.Monad.Error hiding (liftIO)
 import Control.Concurrent
 import Data.String
+import Data.Text as T
 import Vm.Types
+import Vm.DmTypes
 import Vm.State
-import Tools.Misc
+import Tools.Misc as TM
 import Tools.XenStore
 import Tools.Log
 import System
@@ -70,12 +76,12 @@ type Params = [(String, String)]
 --nics :: Uuid -> Rpc [Nic]
 --nics uuid = 
   
-resumeFromSleep :: Uuid -> IO ()
+resumeFromSleep :: Uuid -> IO Bool
 resumeFromSleep uuid = do
     domid <- getDomainId uuid
     exitCode <- system ("xl trigger " ++ domid ++ " s3resume") 
     case exitCode of
-      _  -> return ()
+      _  -> waitForAcpiState uuid 0 (Just 10)
  
 domainID :: Uuid -> IO (Maybe DomainID)
 domainID uuid = do
@@ -174,6 +180,13 @@ sleep uuid =
       _     <- system ("xl trigger " ++ domid ++ " sleep")
       return ()
 
+hibernate :: Uuid -> IO ()
+hibernate uuid = 
+    do
+      domid <- getDomainId uuid
+      _     <- system ("xl hiberate " ++ domid)
+      return ()
+      
 suspendToFile :: Uuid -> FilePath -> IO ()
 suspendToFile uuid file = 
     do
@@ -193,12 +206,12 @@ getDomainId uuid = do
     domid <- readProcess "xl" ["uuid-to-domid", show uuid] []
     case domid of 
       "-1" -> return ("")
-      _    -> return (domid)
+      _    -> return (T.unpack (T.stripEnd (T.pack domid))) --remove trailing newline
 
 changeCd :: Uuid -> String -> IO ()
 changeCd uuid path = do
     domid <- getDomainId uuid
-    _     <- system ("xl cd-insert " ++ domid ++ " hdc " ++ path)
+    _     <- readProcess "xl" ["cd-insert", domid, "hdc", path] []
     return ()
 
 nicFrontendPath :: Uuid -> NicID -> IO (Maybe String)
@@ -212,6 +225,15 @@ nicFrontendPath uuid (XbDeviceID nicid) =
            | nicid_str `elem` vwifs -> return $ Just (domainP ++ "/device/vwif" ++ nicid_str)
            | otherwise -> return Nothing
 
+changeNicNetwork :: Uuid -> NicID -> Network -> IO ()
+changeNicNetwork uuid nid@(XbDeviceID nicid) network = do
+    domid <- getDomainId uuid
+    domainP <- domainXsPath uuid 
+    backendPath <- xsRead (domainP ++ "/device/vif/" ++ show nicid ++ "/backend")
+    case backendPath of
+        Just b  -> do xsWrite (b ++ "/bridge") (show network)
+                      return ()
+        Nothing -> return ()
 
 connectVif :: Uuid -> NicID -> Bool -> IO ()
 connectVif uuid nicid connect = do
@@ -233,6 +255,14 @@ setMemTarget uuid mbs = do
     _     <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
     return ()
 
+
+setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
+setNicBackendDom uuid nic back_domid = do 
+    domid <- getDomainId uuid
+    _  <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
+    _  <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
+    return ()
+
 onNotify :: Uuid -> String -> NotifyHandler -> Rpc ()
 onNotify uuid msgname action =
     let rule = matchSignal "com.citrix.xenclient.xenmgr" "notify"
@@ -243,7 +273,7 @@ onNotify uuid msgname action =
         let [uuidV, statusV] = signalArgs signal
             uuid'  = let Just v = fromVariant $ uuidV in v
             status = let Just v = fromVariant $ statusV in v
-            splits = split ':' status
+            splits = TM.split ':' status
         in
           when (uuid == uuid') $
                case splits of
@@ -260,7 +290,7 @@ onNotifyRemove uuid msgname action =
         let [uuidV, statusV] = signalArgs signal
             uuid'  = let Just v = fromVariant $ uuidV in v
             status = let Just v = fromVariant $ statusV in v
-            splits = split ':' status
+            splits = TM.split ':' status
         in
           when (uuid == uuid') $
                case splits of
@@ -270,10 +300,10 @@ onNotifyRemove uuid msgname action =
 
 invoke :: MonadRpc e m => Uuid -> String -> Params -> m [Variant]
 invoke uuid method params =
-    rpcXl uuid method [toVariant $ pack params]
+    rpcXl uuid method [toVariant $ packXl params]
 
-pack :: Params -> M.Map String String
-pack = M.fromList
+packXl :: Params -> M.Map String String
+packXl = M.fromList
 
 rpcXl :: MonadRpc e m => Uuid -> String -> [Variant] -> m [Variant]
 rpcXl uuid method = rpcCallOnce . xlcall uuid method
