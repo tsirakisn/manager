@@ -75,6 +75,13 @@ type Params = [(String, String)]
 
 --nics :: Uuid -> Rpc [Nic]
 --nics uuid = 
+
+bailIfError :: ExitCode -> String -> IO ()
+bailIfError exitCode msg =
+    do
+      case exitCode of
+        ExitSuccess -> return ()
+        _           -> error msg  
   
 resumeFromSleep :: Uuid -> IO Bool
 resumeFromSleep uuid = do
@@ -99,11 +106,19 @@ waitForAcpiState uuid expected timeout = do
         (_, Nothing)                    -> liftIO (threadDelay $ 10^6) >> waitForAcpiState uuid expected Nothing
         _                               -> error "impossible"
 
+--We need to concoct acpi states (5 or 0) for fully PV domains
+--since get_hvm_param doesn't apply
 acpiState :: Uuid -> IO AcpiState
 acpiState uuid = do 
-    domid    <- getDomainId uuid
-    acpi_state <- readProcess "xl" ["acpi-state", show domid] [] 
-    return $ (read acpi_state :: Int)
+    domid <- getDomainId uuid
+    case domid of
+      "" -> return 5 --no domid indicates domain is off, so acpi state 5
+      _  -> do
+              acpi_state <- readProcess "xl" ["acpi-state", domid] [] 
+              case acpi_state of
+                "9" -> return 0  --If we have the domid but xl returns us 9 for acpi state, it's likely the domain
+                                 --is fully PV, so just return 0
+                _   -> return $ (read acpi_state :: Int)
 
 isFocused :: Uuid -> IO Bool
 isFocused uuid = do
@@ -146,53 +161,53 @@ shutdown uuid =
 pause :: Uuid -> IO ()
 pause uuid = 
     do
-      domid <- getDomainId uuid
-      _     <- system ("xl pause " ++ domid)
-      return ()
+      domid     <- getDomainId uuid
+      exitCode  <- system ("xl pause " ++ domid)
+      bailIfError exitCode "error parsing domain"
 
 unpause :: Uuid -> IO ()
 unpause uuid = do
     domid <- getDomainId uuid
     exitCode <- system ("xl unpause " ++ domid)
-    case exitCode of
-      _ -> return ()
+    bailIfError exitCode "error unpausing domain"
 
 start :: Uuid -> IO ()
 start uuid = 
     do
         state <- state uuid
         case state of
-            Shutdown -> do _  <- system ("xl create " ++ configPath uuid ++ " -p")
-                           return ()
+            Shutdown -> do exitCode  <- system ("xl create " ++ configPath uuid ++ " -p")
+                           case exitCode of
+                             ExitSuccess -> return ()
+                             _           -> error "error creating domain"
             _ -> do return ()
 
 destroy :: Uuid -> IO ()
 destroy uuid = do 
     domid <- getDomainId uuid
     exitCode <- system ("xl destroy " ++ domid)
-    case exitCode of
-      _ -> return ()
+    bailIfError exitCode "error destroying domain"
 
 sleep :: Uuid -> IO ()
 sleep uuid = 
     do
-      domid <- getDomainId uuid
-      _     <- system ("xl trigger " ++ domid ++ " sleep")
-      return ()
+      domid    <- getDomainId uuid
+      exitCode <- system ("xl trigger " ++ domid ++ " sleep")
+      bailIfError exitCode "error entering s3"
 
 hibernate :: Uuid -> IO ()
 hibernate uuid = 
     do
-      domid <- getDomainId uuid
-      _     <- system ("xl hiberate " ++ domid)
-      return ()
+      domid    <- getDomainId uuid
+      exitCode <- system ("xl hiberate " ++ domid)
+      bailIfError exitCode "error entering s4"
       
 suspendToFile :: Uuid -> FilePath -> IO ()
 suspendToFile uuid file = 
     do
-      domid <- getDomainId uuid
-      _     <- system ("xl save " ++ domid ++ " " ++ file)
-      return ()
+      domid    <- getDomainId uuid
+      exitCode <- system ("xl save " ++ domid ++ " " ++ file)
+      bailIfError exitCode "error suspending to file"
 
 resumeFromFile :: Uuid -> FilePath -> Bool -> Bool -> IO ()
 resumeFromFile uuid file delete paused = 
@@ -205,14 +220,15 @@ getDomainId :: Uuid -> IO String
 getDomainId uuid = do 
     domid <- readProcess "xl" ["uuid-to-domid", show uuid] []
     case domid of 
-      "-1" -> return ("")
+      "-1" -> do error "failed to get domid" 
+                 return ("")
       _    -> return (T.unpack (T.stripEnd (T.pack domid))) --remove trailing newline
 
 changeCd :: Uuid -> String -> IO ()
 changeCd uuid path = do
     domid <- getDomainId uuid
-    _     <- readProcess "xl" ["cd-insert", domid, "hdc", path] []
-    return ()
+    (exitCode, _, _)  <- readProcessWithExitCode "xl" ["cd-insert", domid, "hdc", path] []
+    bailIfError exitCode "error changing cd"
 
 nicFrontendPath :: Uuid -> NicID -> IO (Maybe String)
 nicFrontendPath uuid (XbDeviceID nicid) =
@@ -251,17 +267,17 @@ connectVif uuid nicid connect = do
 --paravirt drivers.
 setMemTarget :: Uuid -> Int -> IO ()
 setMemTarget uuid mbs = do
-    domid <- getDomainId uuid
-    _     <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
-    return ()
-
+    domid    <- getDomainId uuid
+    exitCode <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
+    bailIfError exitCode "error setting mem target"
 
 setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
 setNicBackendDom uuid nic back_domid = do 
-    domid <- getDomainId uuid
-    _  <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
-    _  <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
-    return ()
+    domid    <- getDomainId uuid
+    exitCode <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
+    bailIfError exitCode "error detatching nic from domain"
+    exitCode <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
+    bailIfError exitCode "error attaching new nic to domain"
 
 onNotify :: Uuid -> String -> NotifyHandler -> Rpc ()
 onNotify uuid msgname action =
