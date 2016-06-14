@@ -27,6 +27,7 @@ module Vm.Monitor
     , newVmMonitor
     , getMonitorError
     , vmStateWatch
+    , vmStateSubmit
     )
     where
 
@@ -253,6 +254,9 @@ remWatches ws = liftIO $ mapM_ killVmWatch ws
 
 stateWatch :: (VmEvent -> IO ()) -> IO VmWatch
 stateWatch submit = newVmWatch "/state" (submit VmStateUpdate)
+
+vmStateSubmit :: VmMonitor -> IO ()
+vmStateSubmit m = (vmm_submit m) VmStateUpdate
 
 watchesForVm :: (VmEvent -> IO ()) -> [IO VmWatch]
 watchesForVm submit =

@@ -115,10 +115,11 @@ acpiState uuid = do
       "" -> return 5 --no domid indicates domain is off, so acpi state 5
       _  -> do
               acpi_state <- readProcess "xl" ["acpi-state", domid] [] 
-              case acpi_state of
+              let plain_acpi = (T.unpack (T.stripEnd (T.pack acpi_state)))
+              case plain_acpi of
                 "9" -> return 0  --If we have the domid but xl returns us 9 for acpi state, it's likely the domain
                                  --is fully PV, so just return 0
-                _   -> return $ (read acpi_state :: Int)
+                _   -> return $ (read plain_acpi :: Int)
 
 isFocused :: Uuid -> IO Bool
 isFocused uuid = do
@@ -219,10 +220,11 @@ resumeFromFile uuid file delete paused =
 getDomainId :: Uuid -> IO String
 getDomainId uuid = do 
     domid <- readProcess "xl" ["uuid-to-domid", show uuid] []
-    case domid of 
-      "-1" -> do error "failed to get domid" 
+    let plain_domid = (T.unpack (T.stripEnd (T.pack domid)))
+    case plain_domid of 
+      "-1" -> do info "failed to get domid" 
                  return ("")
-      _    -> return (T.unpack (T.stripEnd (T.pack domid))) --remove trailing newline
+      _    -> return (plain_domid) --remove trailing newline
 
 changeCd :: Uuid -> String -> IO ()
 changeCd uuid path = do

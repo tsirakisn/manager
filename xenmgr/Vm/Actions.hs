@@ -732,25 +732,39 @@ setupV4VDevice uuid =
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
-     
+    
+monitorAcpi :: Uuid -> VmMonitor -> AcpiState -> IO ()
+monitorAcpi uuid m state = do
+    acpi_state <- Xl.acpiState uuid
+    if state == 5
+      then do return ()
+      else do
+        if state /= acpi_state
+          then do vmStateSubmit m
+                  threadDelay (10^6)
+                  monitorAcpi uuid m acpi_state
+          else do threadDelay (10^6)
+                  monitorAcpi uuid m acpi_state
+
 bootVm :: VmConfig -> XM ()
 bootVm config
   = do 
        monitor <- vm_monitor <$> xmRunVm uuid vmContext
        liftRpc $ updateXVConfig config
 
-       withPreCreationState uuid create
+       withPreCreationState uuid (create monitor)
     where
       uuid = vmcfgUuid config
       updateXVConfig :: VmConfig -> Rpc ()
       updateXVConfig c = writeXenvmConfig c
-      create = do
+      create monitor = do
        -- create environment iso
        whenM (getVmOvfTransportIso uuid) . liftIO $ do
          createDirectoryIfMissing True envIsoDir
          generateEnvIso uuid (envIsoPath uuid)
          info $ "generated ovf environment ISO " ++ (envIsoPath uuid) ++ " for VM " ++ show uuid
        -- try some ballooning if we lack memory
+       -- fork and monitor Acpi state
        bootstrap <- xmWithBalloonLock $ do
          liftRpc $ do
            balanced <-
@@ -792,6 +806,7 @@ bootVm config
        -- ensure bootstrap and phase handling synchronously terminates before returning (and errors get propagated)
        force bootstrap
        force phases
+       liftIO . void $ forkIO $ monitorAcpi uuid monitor 0 
 
       writable domid path = do
         xsWrite path ""
