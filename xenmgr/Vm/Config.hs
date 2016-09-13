@@ -631,7 +631,7 @@ nicSpecs cfg =
 
 nicSpec :: VmConfig -> Bool -> Maybe Mac -> NicDef -> DomainID -> String
 nicSpec cfg amt eth0Mac nic networkDomID =
-    let entries = [] ++ network ++ bridge ++ backend ++ wireless ++ vmMac ++ nicType
+    let entries = [] ++ bridge ++ backend ++ wireless ++ vmMac ++ nicType
     in
       concat $ intersperse "," entries
     where
@@ -640,8 +640,6 @@ nicSpec cfg amt eth0Mac nic networkDomID =
           = case filter (\net -> niHandle net == nicdefNetwork nic) (vmcfgNetworks cfg) of
                 (ni:_) -> Just ni
                 _      -> Nothing
-      -- path to network daemon 'network' object
-      network   = ["network=" ++ (TL.unpack $ strObjectPath $ networkObjectPath $ nicdefNetwork nic)]
       -- bridge name, only necessary for emulated net interfaces as qemu manages them
       bridge    = ["bridge=" ++ (TL.unpack $ strObjectPath $ networkObjectPath$ nicdefNetwork nic)]
       bridgename= niBridgeName `fmap` netinfo
