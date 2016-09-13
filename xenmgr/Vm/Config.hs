@@ -421,7 +421,7 @@ vmMemoryStaticMax = property "config.memory-static-max"
 vmMemoryMin = property "config.memory-min"
 vmDisplay = property "config.display"
 vmBoot = property "config.boot"
-vmCmdLine = if (property "config.cmdline" == "") then "none" else property "config.cmdline"
+vmCmdLine = property "config.cmdline"
 vmKernel = property "config.kernel"
 vmKernelExtract = property "config.kernel-extract"
 vmInitrd = property "config.initrd"
@@ -835,7 +835,9 @@ miscSpecs cfg = do
                                 _       -> case name of 
                                              "viridian" -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v) 
                                              "serial"   -> name ++ "=" ++ (wrapBrackets $ wrapQuotes v)
-                                             "extra"    -> name ++ "=" ++ (wrapQuotes v) 
+                                             "extra"    -> case v of
+                                                           "" -> []
+                                                           _  -> name ++ "=" ++ (wrapQuotes v) 
                                              "seclabel" -> name ++ "=" ++ (wrapQuotes v)
                                              "dm_display" -> name ++ "=" ++ (wrapQuotes v)
                                              _          -> name ++ "=" ++ v) <$> 
