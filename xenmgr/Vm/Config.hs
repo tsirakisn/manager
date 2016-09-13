@@ -599,7 +599,7 @@ diskSpec :: Uuid -> [FilePath] -> Disk -> Rpc DiskSpec
 diskSpec uuid crypto_dirs d  = do
   let crypto = cryptoSpec uuid crypto_dirs d
   return $ printf "'%s,%s,%s,%s,%s,%s'"
-             (diskPath d) (fileToRaw (enumMarshall $ diskType d)) if ((enumMarshall $ diskDeviceType d) == "cdrom") then "backendtype=phy" else "backendtype=tap" (diskDevice d) (enumMarshall $ diskMode d) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then (enumMarshall $ diskDeviceType d) else "")
+             (diskPath d) (fileToRaw (enumMarshall $ diskType d)) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then "backendtype=phy" else "backendtype=tap") (diskDevice d) (enumMarshall $ diskMode d) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then (enumMarshall $ diskDeviceType d) else "")
              --crypto  figure out how to handle the crypto keys at some point...
       --where snapshot = maybe "" enumMarshall (diskSnapshotMode d)
   where
