@@ -743,6 +743,7 @@ miscSpecs cfg = do
     hpet_    <- hpet
     timer_mode_ <- timer_mode
     nested_ <- nested
+    dm_override_ <- dm_override 
 
     let coresPSpms = if coresPS > 1 then ["cores-per-socket=" ++ show coresPS] else ["cores-per-socket=" ++ show vcpus]
     return $
@@ -754,6 +755,7 @@ miscSpecs cfg = do
         ++ hpet_
         ++ timer_mode_
         ++ nested_
+        ++ dm_override
     where
       uuid = vmcfgUuid cfg
       -- omit if not specified
@@ -784,6 +786,9 @@ miscSpecs cfg = do
 
       stubdom | not (vmcfgStubdom cfg) = return []
               | otherwise              = return ["device_model_stubdomain_override=1"]
+
+      dm_override | not (readConfigPropertyDef uuid vmHvm False) = return []
+                  | otherwise       = return ["device_model_override='/usr/bin/qemu-system-i386'"
 
       usb_opts | not (vmcfgUsbEnabled cfg) = return ["usb=false"]
                | otherwise                 = return []
