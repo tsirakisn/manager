@@ -599,10 +599,15 @@ diskSpec :: Uuid -> [FilePath] -> Disk -> Rpc DiskSpec
 diskSpec uuid crypto_dirs d  = do
   let crypto = cryptoSpec uuid crypto_dirs d
   return $ printf "'%s,%s,%s,%s,%s,%s'"
-             (diskPath d) (fileToRaw (enumMarshall $ diskType d)) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then "backendtype=phy" else "backendtype=tap") (diskDevice d) (enumMarshall $ diskMode d) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then (enumMarshall $ diskDeviceType d) else "")
+             (diskPath d) (fileToRaw (enumMarshall $ diskType d)) (cdType d) (diskDevice d) (enumMarshall $ diskMode d) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then (enumMarshall $ diskDeviceType d) else "")
              --crypto  figure out how to handle the crypto keys at some point...
       --where snapshot = maybe "" enumMarshall (diskSnapshotMode d)
   where
+    cdType d = do
+    stubdom <- readConfigPropertyDef uuid vmStubdom False
+    case (enumMarshall $ diskDeviceType d) of
+        "cdrom" -> if (stubdom) then return "backendtype=tap" else return "backendtype=phy"
+        _       -> return "backendtype=tap"
     fileToRaw typ = if typ == "file" then "raw" else typ
 
 -- Next section: information about Network Interfaces
@@ -659,7 +664,9 @@ nicSpec cfg amt eth0Mac nic networkDomID =
                 | Just mac <- eth0Mac, amt == True  = ["mac=" ++ unswizzleMac mac]
       -- Otherwise we do not touch the VM mac and let xenvm choose
                 | otherwise                         = [ ]
-      nicType   = ["type=vif"] --not for stubdoms.
+      nicType   = do
+        stubdom <- readConfigPropertyDef uuid vmStubdom False
+        stubdom <- if stubdom then return ["type=ioemu"] else return ["type=vif"]
 
 unswizzleMac :: Mac -> Mac
 unswizzleMac mac = let bytes = macToBytes mac
@@ -826,7 +833,6 @@ miscSpecs cfg = do
           --, ("startup"         , vmStartup)  --TODO: likely remove this
           , ("seclabel"        , vmFlaskLabel)
           , ("serial"          , vmSerial) 
-          , ("stubdom"          , vmStubdom) 
           --, ("stubdom-cmdline" , vmStubdomCmdline) --stubdom "extra" field not sure how to handle this yet
           --, ("stubdom-memory"  , vmStubdomMemory) --stubdom "memory" field not sure how to handle this yet
           ]
