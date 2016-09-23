@@ -883,7 +883,11 @@ bootVm config
         sentinel <- sentinelPath
         -- allow writing to sentinel
         maybe (return()) (\p -> liftIO $ xsWrite p "" >> xsChmod p "b0") sentinel
-        
+       
+        --maybe start qmp helper here, before domain is running, but has domid
+        isStubdom <- readConfigPropertyDef uuid vmStubdom False
+        liftIO $ startQmpHelper isStubdom uuid
+         
         -- AFTER DOMAIN CREATION
         liftRpc $ do
           -- assign sticky cd drives
@@ -910,6 +914,15 @@ bootVm config
             case s of
               Nothing -> return Nothing
               Just p  -> return (Just $ domainXSPath domid ++ "/" ++ p)
+
+--ok to assume stubdom will always be +1?  Probably not
+startQmpHelper :: Bool -> Uuid -> IO ()
+startQmpHelper isStubdom uuid = do
+  domid <- getDomainID uuid
+  if isStubdom then
+    stubdomid <- xsRead ("/local/domain/" ++ show domid ++ "/image/device-model-domid")
+    _ <- system ("/usr/lib/xen/bin/qmp_helper " ++ stubdomid)
+  return ()
 
 --FIXME: get rid of this when/if we remove dbusbouncer from ndvm
 twiddlePermissions :: Uuid -> Rpc ()
