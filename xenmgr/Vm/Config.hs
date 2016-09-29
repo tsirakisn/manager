@@ -853,7 +853,7 @@ miscSpecs cfg = do
                                                            _  -> name ++ "=" ++ (wrapQuotes v) 
                                              "seclabel" -> name ++ "=" ++ (wrapQuotes v)
                                              "dm_display" -> name ++ "=" ++ (wrapQuotes v)
-                                             "boot"     -> name ++ "=" ++ (wrapBrackets v)
+                                             "boot"     -> name ++ "=" ++ (wrapQuotes v)
                                              _          -> name ++ "=" ++ v) <$> 
                                 readConfigProperty uuid prop
 
