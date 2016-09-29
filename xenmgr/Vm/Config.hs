@@ -817,7 +817,7 @@ miscSpecs cfg = do
           , ("viridian"        , vmViridian) --set to 'default'
           , ("nx"              , vmNx)
           , ("dm_display"      , vmDisplay) --this should now be set to surfman or none
-          --, ("boot"            , vmBoot) --TODO come back to this
+          , ("boot"            , vmBoot) --TODO come back to this
           , ("extra"           , vmCmdLine)
           --, ("initrd"          , vmInitrd)  --probably remove this, seems duplicate of kernel option
           --, ("acpi-pt"         , vmAcpiPt) --TODO evaluate this
@@ -853,6 +853,7 @@ miscSpecs cfg = do
                                                            _  -> name ++ "=" ++ (wrapQuotes v) 
                                              "seclabel" -> name ++ "=" ++ (wrapQuotes v)
                                              "dm_display" -> name ++ "=" ++ (wrapQuotes v)
+                                             "boot"     -> name ++ "=" ++ (wrapBrackets v)
                                              _          -> name ++ "=" ++ v) <$> 
                                 readConfigProperty uuid prop
 
