@@ -844,13 +844,21 @@ bootVm config
 
       handleCreationPhases :: XM ()
       handleCreationPhases = do
+        waitForVmInternalState uuid CreatingDevices 30
+
+        liftRpc $ do
+          exportVmSwitcherInfo uuid
+          stubdom <- getVmStubdom uuid
+          when stubdom $ updateStubDomainID uuid
+          stubdom_memory <- getVmStubdomMemory uuid
+          stubdom_cmdline <- getVmStubdomCmdline uuid
+          applyVmFirewallRules uuid
+
         waitForVmInternalState uuid Created 30
-         
         -- BEFORE DEVICE MODEL
         info $ "pre-dm setup for " ++ show uuid
         liftRpc $ do 
           twiddlePermissions uuid
-          exportVmSwitcherInfo uuid
           setupCDDrives uuid
           --No longer passing v4v in the config, keep in db.
           v4v_enabled <- getVmV4V uuid
@@ -863,20 +871,11 @@ bootVm config
             liftIO $ xsWrite backendNode (show domid)
             liftIO $ xsChmod backendNode "r0"
 
-          stubdom <- getVmStubdom uuid
-          when stubdom $ updateStubDomainID uuid
-          stubdom_memory <- getVmStubdomMemory uuid
-          stubdom_cmdline <- getVmStubdomCmdline uuid
-
           vfb_enabled <- getVmVfb uuid
           when vfb_enabled $ surfmanDbusCalls uuid
           
           vkb_enabled <- getVmVkb uuid
           when vkb_enabled $ inputDbusCalls uuid
-          applyVmFirewallRules uuid
-          -- notify that v4v rules have been set up, so xenvm can unpause stubdom
-          whenDomainID_ uuid $ \domid -> liftIO $
-            xsWrite (domainXSPath domid ++ "/v4v-firewall-ready") "1"
           info $ "done pre-dm setup for " ++ show uuid
          
         waitForVmInternalState uuid Created 60
