@@ -831,8 +831,8 @@ miscSpecs cfg = do
           --, ("startup"         , vmStartup)  --TODO: likely remove this
           , ("seclabel"        , vmFlaskLabel)
           , ("serial"          , vmSerial) 
-          --, ("stubdom-cmdline" , vmStubdomCmdline) --stubdom "extra" field not sure how to handle this yet
-          --, ("stubdom-memory"  , vmStubdomMemory) --stubdom "memory" field not sure how to handle this yet
+          , ("stubdom_cmdline" , vmStubdomCmdline)
+          , ("stubdom_memory"  , vmStubdomMemory)
           ]
 
       otherXenvmParams = concat <$> sequence
@@ -854,6 +854,7 @@ miscSpecs cfg = do
                                              "seclabel" -> name ++ "=" ++ (wrapQuotes v)
                                              "dm_display" -> name ++ "=" ++ (wrapQuotes v)
                                              "boot"     -> name ++ "=" ++ (wrapQuotes v)
+                                             "stubdom_cmdline" -> name ++ "=" ++ (wrapQuotes v)
                                              _          -> name ++ "=" ++ v) <$> 
                                 readConfigProperty uuid prop
 
