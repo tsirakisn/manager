@@ -803,9 +803,9 @@ miscSpecs cfg = do
                | otherwise                 = return []
 
       platform =
-                  x (vmcfgRestrictDisplayDepth cfg) "restrictdisplaydepth=1"
-               ++ x (vmcfgRestrictDisplayRes   cfg) "restrictdisplayres=1"
-               where x cond s = if cond then [s] else []
+                  x (vmcfgRestrictDisplayDepth cfg) "restrictdisplaydepth="
+               ++ x (vmcfgRestrictDisplayRes   cfg) "restrictdisplayres="
+               where x cond s = if cond then [s++"1"] else [s++"0"]
 
       -- Other config keys taken directly from .config subtree which we delegate directly
       -- to xenvm
