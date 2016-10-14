@@ -803,8 +803,8 @@ miscSpecs cfg = do
                | otherwise                 = return []
 
       platform =
-                  x (vmcfgRestrictDisplayDepth cfg) "platform=restrictdisplaydepth=1"
-               ++ x (vmcfgRestrictDisplayRes   cfg) "platform=restrictdisplayres=1"
+                  x (vmcfgRestrictDisplayDepth cfg) "restrictdisplaydepth=1"
+               ++ x (vmcfgRestrictDisplayRes   cfg) "restrictdisplayres=1"
                where x cond s = if cond then [s] else []
 
       -- Other config keys taken directly from .config subtree which we delegate directly
