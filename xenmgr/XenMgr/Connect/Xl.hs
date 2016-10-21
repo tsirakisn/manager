@@ -1,3 +1,12 @@
+--
+-- This module provides an implementation to interface with
+-- libXL, a flavor of toolstack for the Xen Hypervisor.
+-- Most calls here simply invoke the xl command line utility
+-- for simplicity, although one could bypass the xl command line
+-- utility by using the Haskell FFI (foreign function interface)
+-- to hook directly into libXL if more robust features are desired.
+--
+
 
 {-# LANGUAGE OverloadedStrings #-}
 module XenMgr.Connect.Xl

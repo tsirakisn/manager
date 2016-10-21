@@ -504,54 +504,54 @@ startVmInternal uuid = do
 
       --Based on bdf get all functions on that device bus:device.function
       --and pass them through to vm in case of bus level reset.
-        maybePtGpuFuncs uuid = do
-          ok <- isGpuPt uuid
-          if ok
-            then do
-              gfxbdf <- getVmGpu uuid
-              devices <- liftIO pciGetDevices
-              let devMatches = filter (bdFilter (take 7 gfxbdf) gfxbdf) devices in
-                  mapM_ (add_pt_rule_bdf uuid) devMatches
-            else return ()
+      maybePtGpuFuncs uuid = do
+        ok <- isGpuPt uuid
+        if ok
+          then do
+            gfxbdf <- getVmGpu uuid
+            devices <- liftIO pciGetDevices
+            let devMatches = filter (bdFilter (take 7 gfxbdf) gfxbdf) devices in
+                mapM_ (add_pt_rule_bdf uuid) devMatches
+          else return ()
 
-        --Filter function to match on domain:bus and also filter out the video function
-        bdFilter match bdf d = (isInfixOf match (show (devAddr d))) && (bdf /= (show (devAddr d))) 
+      --Filter function to match on domain:bus and also filter out the video function
+      bdFilter match bdf d = (isInfixOf match (show (devAddr d))) && (bdf /= (show (devAddr d))) 
 
-        --Check if vm has a bdf in gpu
-        isGpuPt uuid = do
-            gpu <- getVmGpu uuid
-            return (gpu /= "" && gpu /= "hdx")
+      --Check if vm has a bdf in gpu
+      isGpuPt uuid = do
+          gpu <- getVmGpu uuid
+          return (gpu /= "" && gpu /= "hdx")
 
-        prepareAndCheckConfig uuid = do
-          ok <- stage1 -- early tests / dependency startup
-          if (not ok)
-             then return Nothing
-             else do
-               -- this (config gather) needs to be done after dependency startup to get correct
-               -- backend domids
-               config <- liftRpc $ getVmConfig uuid True
-               info $ "gathered config for VM " ++ show uuid
-               ok <- stage2 config
-               if ok then return (Just config) else return Nothing
+      prepareAndCheckConfig uuid = do
+        ok <- stage1 -- early tests / dependency startup
+        if (not ok)
+           then return Nothing
+           else do
+             -- this (config gather) needs to be done after dependency startup to get correct
+             -- backend domids
+             config <- liftRpc $ getVmConfig uuid True
+             info $ "gathered config for VM " ++ show uuid
+             ok <- stage2 config
+             if ok then return (Just config) else return Nothing
 
-        stage1
-          = startupCheckVmState uuid
-              `followby` startupCheckHostStates uuid
-              `followby` startupDependencies uuid
-              `followby` startupExtractKernel uuid
-              `followby` startupMeasureVm uuid
-        stage2 config
-          = startupCheckNics config
-              `followby` startupCheckGraphicsConstraints config
-              `followby` startupCheckIntelConstraints config
-              `followby` startupCheckAMTConstraints config
-              `followby` startupCheckPCI config
-              `followby` startupCheckOemFeatures config
-              `followby` startupCheckSyncXTComfortable uuid
+      stage1
+        = startupCheckVmState uuid
+            `followby` startupCheckHostStates uuid
+            `followby` startupDependencies uuid
+            `followby` startupExtractKernel uuid
+            `followby` startupMeasureVm uuid
+      stage2 config
+        = startupCheckNics config
+            `followby` startupCheckGraphicsConstraints config
+            `followby` startupCheckIntelConstraints config
+            `followby` startupCheckAMTConstraints config
+            `followby` startupCheckPCI config
+            `followby` startupCheckOemFeatures config
+            `followby` startupCheckSyncXTComfortable uuid
 
-        followby f g =
-          do ok <- f
-             if ok then g else return False
+      followby f g =
+        do ok <- f
+           if ok then g else return False
 
 startupCheckVmState :: Uuid -> XM Bool
 startupCheckVmState uuid
@@ -716,6 +716,7 @@ withPreCreationState uuid f =
                                when (s == PreCreate) $ do
                                  xmRunVm uuid $ vmEvalEvent (VmStateChange Shutdown)
                                throwError e)
+
 --Write the xenstore nodes for the backend and the frontend for the v4v device
 --set states to Unknown and Initializing respectively, like xenvm used to do 
 xsp domid = "/local/domain/" ++ show domid
@@ -732,7 +733,8 @@ setupV4VDevice uuid =
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend") (xsp domid ++ "/device/v4v/0")
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
-    
+
+--Watch acpi state when booting a VM, used to be handled in xenvm
 monitorAcpi :: Uuid -> VmMonitor -> AcpiState -> IO ()
 monitorAcpi uuid m state = do
     acpi_state <- Xl.acpiState uuid
@@ -765,24 +767,10 @@ bootVm config
          info $ "generated ovf environment ISO " ++ (envIsoPath uuid) ++ " for VM " ++ show uuid
        -- try some ballooning if we lack memory
        -- fork and monitor Acpi state
-       bootstrap <- xmWithBalloonLock $ do
-         liftRpc $ do
-           balanced <-
-             --do ok <- balanceToBoot uuid
-             do
-                if True
-                   then return True
-                   else do
-                     -- another attempt with minimal memory
-                     -- TODO: this should work out maximum amount of memory we can use instead of trying with
-                     -- with minimum
-                     let config' = config { vmcfgMemoryMib = vmcfgMemoryMinMib config }
-                     updateXVConfig config'
-                     balanceToBoot uuid
-           when (not balanced) $ failNotEnoughMemory
+       bootstrap <- do
 
-           -- Clear the hibernated property
-           saveConfigProperty uuid vmHibernated False
+         -- Clear the hibernated property
+         saveConfigProperty uuid vmHibernated False
 
          -- run custom pre boot action
          liftRpc $ runEventScript HardFail uuid getVmRunPreBoot [uuidStr uuid]
@@ -797,7 +785,7 @@ bootVm config
                   then return False
                   else liftIO (doesFileExist suspend_file)
            if not exists
-                then do liftIO $ Xl.start uuid
+                then do liftIO $ Xl.start uuid --we start paused by default
                 else do liftIO $ xsWrite (vmSuspendImageStatePath uuid) "resume"
                         liftIO $ Xl.resumeFromFile uuid suspend_file False True
          return bootstrap 
@@ -831,6 +819,8 @@ bootVm config
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-product") "OpenXT 5.0.0"
             liftIO $ xsWrite (xsp domid ++ "/bios-strings/xenvendor-seamless-hint") "0"
       
+      --Changes to surfman/inputserver moved these calls into xenvm. With xenvm removal, it's easier to call
+      --them from Xenmgr.
       surfmanDbusCalls uuid = 
           whenDomainID_ uuid $ \domid -> do 
             rpcCallOnce (Xl.xlSurfmanDbus uuid "set_pv_display" [toVariant $ (read (show domid) :: Int32), toVariant $ ""])
@@ -846,6 +836,9 @@ bootVm config
       handleCreationPhases = do
         waitForVmInternalState uuid CreatingDevices 30
 
+        --Move these tasks up earlier in the guest boot process. Prevents the need
+        --for XL to implement a handshake with xenmgr for v4v firewall rules. Also speeds up
+        --the boot process
         liftRpc $ do
           exportVmSwitcherInfo uuid
           stubdom <- getVmStubdom uuid
@@ -973,14 +966,11 @@ disconnectFrontVifs back_uuid =
 rebootVm :: Uuid -> Rpc ()
 rebootVm uuid = do
     info $ "rebooting VM " ++ show uuid
-    -- Write XENVM configuration file
+    -- Write XL configuration file
     writeXenvmConfig =<< getVmConfig uuid True
-
-    -- Request start from XENVM
-    --use_agent <- RpcAgent.guestAgentRunning uuid
-    --if use_agent
-    --   then RpcAgent.reboot uuid
-    --   else liftIO $ Xl.reboot uuid
+    --Let xl take care of bringing down the domain and updating our state
+    --When xenmgr sees the 'Rebooted' state, it fires off a startVm call,
+    --which performs all the normal guest boot tasks, while xl brings up the domain.
     liftIO $ Xl.reboot uuid
 
 shutdownVm :: Uuid -> Rpc ()

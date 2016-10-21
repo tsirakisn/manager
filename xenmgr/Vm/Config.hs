@@ -33,8 +33,8 @@ module Vm.Config (
                 , getConfigPropertyName
 
                   -- Xenvm config out of database config
-                , getXenvmConfig
-                , stringifyXenvmConfig
+                , getXlConfig
+                , stringifyXlConfig
 
                   -- list of interesting config properties
                 , vmUuidP, vmName, vmDescription, vmType, vmSlot, vmImagePath, vmPvAddons, vmPvAddonsVersion
@@ -511,11 +511,11 @@ diagnose cfg
     | otherwise = [ ]
 
 ------------------------------------------
--- Create a config file for running XENVM
+-- Create a config file for running Xl
 ------------------------------------------
 
--- Xenvm config is a simple list of strings in the format of key=value
-newtype XenvmConfig = XenvmConfig [ Param ]
+-- Xl config is a simple list of strings in the format of key=value
+newtype XlConfig = XlConfig [ Param ]
 
 type Param    = String
 type UserID   = String
@@ -529,13 +529,13 @@ amtPtActive uuid = do
   -- Amt PT is active if a) system amt pt is activated b) vm amt pt is activated
   (&&) <$> haveSystemAmtPt <*> readConfigPropertyDef uuid vmAmtPt False
 
-stringifyXenvmConfig :: XenvmConfig -> String
-stringifyXenvmConfig (XenvmConfig params) = unlines params
+stringifyXlConfig :: XlConfig -> String
+stringifyXlConfig (XlConfig params) = unlines params
 
--- Gets a xenvm config, given domain ID of networking domain.
-getXenvmConfig :: VmConfig -> Rpc XenvmConfig
-getXenvmConfig cfg =
-    fmap (XenvmConfig . concat) . mapM (force <=< future) $
+-- Gets a xl config, given domain ID of networking domain.
+getXlConfig :: VmConfig -> Rpc XlConfig
+getXlConfig cfg =
+    fmap (XlConfig . concat) . mapM (force <=< future) $
     [prelude, diskSpecs cfg, nicSpecs cfg, pciSpecs cfg
     , extraHvmSpecs uuid
     , miscSpecs cfg]
@@ -558,22 +558,14 @@ getXenvmConfig cfg =
                  return $ [ "uuid='" ++ (show uuid) ++ "'"
                           , "vnc=0"
                           , "vga='stdvga'"
-                          --, "power-management=2"
-                          --, "startup=poweroff"
-                          --, "extra-local-watch=power-state"
-                          --, "on_restart=preserve"
-                          --, "qemu-dm-path=" ++ (vmcfgQemuDmPath cfg)
-                          --, "qemu-dm-timeout=" ++ show (vmcfgQemuDmTimeout cfg)
-                          --, "xci-cpuid-signature=" ++ (if vmcfgXciCpuidSignature cfg then "true" else "false")
-                          ] -- oem_acpi
+                          , "crypto_key_dir='" ++ (show vmcfgCryptoKeyDirs cfg) ++ "'"
+                          , "xci_cpuid_signature=" ++ (if vmcfgXciCpuidSignature cfg then "1" else "0")
+                          ] 
                             ++ nameStr
                             ++ kernel
                             ++ builder
                             ++ dm_args
                             
-    --oem_acpi | vmcfgOemAcpiFeatures cfg = [ "oem-features=1" ]
-             -- | otherwise = [ ]
-
 -- Next section: information about disk drives
 allDisks = vmcfgDisks
 validDisks = filterM isDiskValid . allDisks
@@ -584,6 +576,7 @@ isDiskValid disk =
       VirtualHardDisk -> liftIO . doesFileExist $ diskPath disk
       _               -> return True
 
+--build an xl config style disk list
 diskSpecs :: VmConfig -> Rpc [DiskSpec]
 diskSpecs cfg = do
   disklist <- dSpec
@@ -597,12 +590,9 @@ diskSpecs cfg = do
 
 diskSpec :: Uuid -> [FilePath] -> Disk -> Rpc DiskSpec
 diskSpec uuid crypto_dirs d  = do
-  let crypto = cryptoSpec uuid crypto_dirs d
   stubdom <- readConfigPropertyDef uuid vmStubdom False
   return $ printf "'%s,%s,%s,%s,%s,%s'"
              (diskPath d) (fileToRaw (enumMarshall $ diskType d)) (cdType stubdom d) (diskDevice d) (enumMarshall $ diskMode d) (if ((enumMarshall $ diskDeviceType d) == "cdrom") then (enumMarshall $ diskDeviceType d) else "")
-             --crypto  figure out how to handle the crypto keys at some point...
-      --where snapshot = maybe "" enumMarshall (diskSnapshotMode d)
   where
     cdType stubdom d =
       case (enumMarshall $ diskDeviceType d) of
@@ -789,9 +779,11 @@ miscSpecs cfg = do
       -- Activate sound
       sound = maybeToList . fmap (("soundhw='"++) <$> (++"'")) <$> readConfigProperty uuid vmSound
 
+      -- Tells xl to use a stubdom or not
       stubdom | not (vmcfgStubdom cfg) = return []
               | otherwise              = return ["device_model_stubdomain_override=1"]
 
+      -- Specifies path to qemu binary
       dm_override =
         do
            hvm <- readConfigPropertyDef uuid vmHvm False
@@ -817,24 +809,21 @@ miscSpecs cfg = do
           , ("viridian"        , vmViridian) --set to 'default'
           , ("nx"              , vmNx)
           , ("dm_display"      , vmDisplay) --this should now be set to surfman or none
-          , ("boot"            , vmBoot) --TODO come back to this
+          , ("boot"            , vmBoot)
           , ("extra"           , vmCmdLine)
-          --, ("initrd"          , vmInitrd)  --probably remove this, seems duplicate of kernel option
           --, ("acpi-pt"         , vmAcpiPt) --TODO evaluate this
           , ("vcpus"           , vmVcpus)
           , ("hap"             , vmHap)
-          --, ("vsnd"            , vmVsnd) -- Doesn't look like it's used
-          , ("vkb"            , vmVkb) --Patch in xl to support creating the vkbd
-          , ("vfb"             , vmVfb)  -- Don't care about this, maybe surfman cares...
-          --, ("passthrough-io"  , vmPassthroughIo)  --Both options appear unused
-          --, ("passthrough-mmio", vmPassthroughMmio)
-          --, ("startup"         , vmStartup)  --TODO: likely remove this
+          , ("vkb"             , vmVkb) 
+          , ("vfb"             , vmVfb)
           , ("seclabel"        , vmFlaskLabel)
           , ("serial"          , vmSerial) 
           , ("stubdom_cmdline" , vmStubdomCmdline)
           , ("stubdom_memory"  , vmStubdomMemory)
           ]
 
+      -- xl config handles certain options different than others (eg. quotes, brackets)
+      -- we format them on a case by case basis here before sending them off to xl.
       otherXenvmParams = concat <$> sequence
                          [ reverse . catMaybes <$> mapM g passToXenvmProperties
                          , extra_xenvm

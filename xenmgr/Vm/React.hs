@@ -290,15 +290,14 @@ whenShutdown xm reason = do
         info $ "remove alsa file " ++ alsafile
         whenM (doesFileExist alsafile) (removeFile alsafile)
 
+--Reboot has been slightly reworked. The domain is brought down by xl and
+--restarted, XenMgr simply performs its regular duties on domain creation,
+--synchronizing at the "Creating Devices" and "Created" states.
 whenRebooted xm = do
     uuid <- vmUuid
-    p <- uuidRpc getVmPreserveOnReboot
-    -- do not destroy/restart vm if preserve on reboot flag is set
-    when (not p) $ do
-      --uuidIO Xl.destroy
-      uuidRpc unapplyVmFirewallRules
-      liftIO $ removeVmEnvIso uuid
-      uuidRpc (backgroundRpc . runXM xm . startVm)
+    uuidRpc unapplyVmFirewallRules
+    liftIO $ removeVmEnvIso uuid
+    uuidRpc (backgroundRpc . runXM xm . startVm)
   where
     backgroundRpc f =
       do c <- rpcGetContext
@@ -461,6 +460,10 @@ checkBsgDevStatus = uuidRpc $ \uuid -> whenDomainID_ uuid $ \domid ->
           BSGDevice <$> r a <*> r b <*> r c <*> r d
         _ -> Nothing
 
+-- This is a new notify function to support state updates coming from xl
+-- Instead of implementing dbus support in xl, state updates are written to a 
+-- xenstore node which XenMgr watches, which then fires off a dbus message, upon
+-- which any state change code is handled normally. 
 notifyVmStateUpdate :: Vm ()
 notifyVmStateUpdate = do
     uuid <- vmUuid
