@@ -6,6 +6,8 @@
 -- utility by using the Haskell FFI (foreign function interface)
 -- to hook directly into libXL if more robust features are desired.
 --
+-- Author: Chris Rogers <rogersc@ainfosec.com>
+--
 
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -71,49 +73,37 @@ import qualified Data.Map as M
 type NotifyHandler = [String] -> Rpc ()
 type Params = [(String, String)]
 
-
---wiredMac :: Uuid -> Rpc (Maybe String)
---wiredMac uuid = wiredNic uuid >>- return . maybe Nothing $ Just . nicMac)
---
---wiredNic :: Uuid -> Rpc (Maybe Nic)
---wiredNic uuid = 
---    do ns <- nics uuid
---        case ns of 
---          []   -> return Nothing
---          n: _ -> return $ Just n 
-
---nics :: Uuid -> Rpc [Nic]
---nics uuid = 
-
 bailIfError :: ExitCode -> String -> IO ()
 bailIfError exitCode msg =
     do
       case exitCode of
         ExitSuccess -> return ()
-        _           -> error msg  
-  
+        _           -> error msg
+
 resumeFromSleep :: Uuid -> IO Bool
 resumeFromSleep uuid = do
     domid <- getDomainId uuid
     exitCode <- system ("xl trigger " ++ domid ++ " s3resume") 
     case exitCode of
       _  -> waitForAcpiState uuid 0 (Just 10)
- 
+
+--Given the uuid, get the domid, if there is one 
 domainID :: Uuid -> IO (Maybe DomainID)
 domainID uuid = do
     domid  <- getDomainId uuid
     return $ if domid == "" then Nothing else Just (read domid :: DomainID)
 
+--Wait the provided duration for the domain to get into the specified acpi state
 waitForAcpiState :: Uuid -> Int -> Maybe Int -> IO Bool
 waitForAcpiState uuid expected timeout = do
     s <- acpiState uuid
     case  (s, timeout) of
-        (x, _)          | x == expected -> return True
-        (_, Just t)     | t <= 0        -> return False
-        (_, Just t)     | t > 0         -> do liftIO (threadDelay $ 10^6)
-                                              waitForAcpiState uuid expected (Just $ t-1)
-        (_, Nothing)                    -> liftIO (threadDelay $ 10^6) >> waitForAcpiState uuid expected Nothing
-        _                               -> error "impossible"
+      (x, _)          | x == expected -> return True
+      (_, Just t)     | t <= 0        -> return False
+      (_, Just t)     | t > 0         -> do liftIO (threadDelay $ 10^6)
+                                            waitForAcpiState uuid expected (Just $ t-1)
+      (_, Nothing)                    -> liftIO (threadDelay $ 10^6) >> waitForAcpiState uuid expected Nothing
+      _                               -> error "impossible"
 
 --We need to concoct acpi states (5 or 0) for fully PV domains
 --since get_hvm_param doesn't apply
@@ -127,26 +117,30 @@ acpiState uuid = do
               let plain_acpi = (T.unpack (T.stripEnd (T.pack acpi_state)))
               case plain_acpi of
                 "9" -> return 0  --If we have the domid but xl returns us 9 for acpi state, it's likely the domain
-                                 --is fully PV, so just return 0
+                                 --is fully PV, so just return 0.
                 _   -> return $ (read plain_acpi :: Int)
 
+--Return whether the vm is currently in focus
 isFocused :: Uuid -> IO Bool
 isFocused uuid = do
     s <- state uuid
     p <- domainXsPath uuid
     haveFocus s p
   where
-    
     haveFocus Shutdown _    = return False
     haveFocus _        domP = let path = domP ++ "/switcher/have_focus" in
                               liftIO $ xsRead path >>= return . maybe False (== "1")
 
+--Return the path to the domain in the xenstore
 domainXsPath :: Uuid -> IO String
 domainXsPath uuid = do
     domid <- getDomainId uuid
     case domid of
       "" -> return $ "/local/domain/unknown"
       _  -> return $ "/local/domain/" ++ show domid 
+
+
+--The following functions are all domain lifecycle operations, and self-explanatory
 
 reboot :: Uuid -> IO ()
 reboot uuid = 
@@ -181,20 +175,24 @@ unpause uuid = do
     exitCode <- system ("xl unpause " ++ domid)
     bailIfError exitCode "error unpausing domain"
 
+--It should be noted that by design, we start our domains paused to ensure all the 
+--backend components are created and xenstore nodes are written before the domain 
+--begins running.
 start :: Uuid -> IO ()
 start uuid = 
     do
-        state <- state uuid
-        case state of
-            Shutdown -> do exitCode  <- system ("xl create " ++ configPath uuid ++ " -p")
-                           case exitCode of
-                             ExitSuccess -> return ()
-                             _           -> error "error creating domain"
-            _ -> do return ()
+      state <- state uuid
+      case state of
+        Shutdown -> do
+                      exitCode <- system ("xl create " ++ configPath uuid ++ " -p")
+                      case exitCode of
+                        ExitSuccess -> return ()
+                        _           -> error "error creating domain"
+        _        -> do return ()
 
 destroy :: Uuid -> IO ()
 destroy uuid = do 
-    domid <- getDomainId uuid
+    domid    <- getDomainId uuid
     exitCode <- system ("xl destroy " ++ domid)
     bailIfError exitCode "error destroying domain"
 
@@ -226,6 +224,7 @@ resumeFromFile uuid file delete paused =
       _ <- system ("xl restore " ++ p ++ file)
       if delete then removeFile file else return ()
 
+--Ask xl directly for the domid
 getDomainId :: Uuid -> IO String
 getDomainId uuid = do 
     domid <- readProcess "xl" ["uuid-to-domid", show uuid] []
@@ -235,12 +234,14 @@ getDomainId uuid = do
                  return ("")
       _    -> return (plain_domid) --remove trailing newline
 
+--For a given uuid, change the iso in the cd drive slot
 changeCd :: Uuid -> String -> IO ()
 changeCd uuid path = do
     domid <- getDomainId uuid
     (exitCode, _, _)  <- readProcessWithExitCode "xl" ["cd-insert", domid, "hdc", path] []
     bailIfError exitCode "error changing cd"
 
+--Return the frontend xenstore path of the nic device (or Nothing)
 nicFrontendPath :: Uuid -> NicID -> IO (Maybe String)
 nicFrontendPath uuid (XbDeviceID nicid) =
     do domainP <- domainXsPath uuid
@@ -252,6 +253,7 @@ nicFrontendPath uuid (XbDeviceID nicid) =
            | nicid_str `elem` vwifs -> return $ Just (domainP ++ "/device/vwif" ++ nicid_str)
            | otherwise -> return Nothing
 
+--For a given nic, reassign the backend network it should belong to
 changeNicNetwork :: Uuid -> NicID -> Network -> IO ()
 changeNicNetwork uuid nid@(XbDeviceID nicid) network = do
     domid <- getDomainId uuid
@@ -262,6 +264,7 @@ changeNicNetwork uuid nid@(XbDeviceID nicid) network = do
                       return ()
         Nothing -> return ()
 
+--Ask a vif to switch to the connected or disconnected state
 connectVif :: Uuid -> NicID -> Bool -> IO ()
 connectVif uuid nicid connect = do
     domainP <- domainXsPath uuid
@@ -275,13 +278,15 @@ connectVif uuid nicid connect = do
           | otherwise               = "1"
 
 --Adjust memory through the balloon driver, unreliable, requires correct
---paravirt drivers.
+--paravirt drivers.  Implemented here in the event ballooning is ever desired
+--and implemented correctly
 setMemTarget :: Uuid -> Int -> IO ()
 setMemTarget uuid mbs = do
     domid    <- getDomainId uuid
     exitCode <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
     bailIfError exitCode "error setting mem target"
 
+--Given the uuid of a domain and a nic id, set the target backend domid for that nic
 setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
 setNicBackendDom uuid nic back_domid = do 
     domid    <- getDomainId uuid
@@ -290,6 +295,8 @@ setNicBackendDom uuid nic back_domid = do
     exitCode <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
     bailIfError exitCode "error attaching new nic to domain"
 
+--Implement signal watcher to fire off handler upon receiving
+--notify message over dbus
 onNotify :: Uuid -> String -> NotifyHandler -> Rpc ()
 onNotify uuid msgname action =
     let rule = matchSignal "com.citrix.xenclient.xenmgr" "notify"
@@ -307,6 +314,7 @@ onNotify uuid msgname action =
                  (msg:args) | msg == msgname    -> action args
                  _                              -> return ()
 
+--Remove the handler setup by onNotify
 onNotifyRemove :: Uuid -> String -> NotifyHandler -> Rpc ()
 onNotifyRemove uuid msgname action =
     let rule = matchSignal "com.citrix.xenclient.xenmgr" "notify"
@@ -324,25 +332,8 @@ onNotifyRemove uuid msgname action =
                  (msg:args) | msg == msgname    -> action args
                  _                              -> return ()
 
-
-invoke :: MonadRpc e m => Uuid -> String -> Params -> m [Variant]
-invoke uuid method params =
-    rpcXl uuid method [toVariant $ packXl params]
-
-packXl :: Params -> M.Map String String
-packXl = M.fromList
-
-rpcXl :: MonadRpc e m => Uuid -> String -> [Variant] -> m [Variant]
-rpcXl uuid method = rpcCallOnce . xlcall uuid method
-
-xlcall :: Uuid -> String -> [Variant] -> RpcCall
-xlcall uuid memb args =
-  RpcCall service object interface (fromString memb) args
-  where
-    service = fromString $ "xl.signal.notify"
-    interface = fromString $ "xl.signal.notify"
-    object = fromString $ "/xl/signal/notify"
-
+--Construct an RPC message for surfman given an argument list and
+--command to run.
 xlSurfmanDbus uuid memb args = 
   RpcCall service object interface (fromString memb) args
   where
@@ -350,6 +341,8 @@ xlSurfmanDbus uuid memb args =
     interface = fromString $ "com.citrix.xenclient.surfman"
     object = fromString $ "/"
 
+--Construct an RPC for inputserver given an argument list and
+--command to run
 xlInputDbus uuid memb args = 
   RpcCall service object interface (fromString memb) args
   where
@@ -357,12 +350,16 @@ xlInputDbus uuid memb args =
     interface = fromString $ "com.citrix.xenclient.input"
     object = fromString $ "/"
 
+--Path to the xl config file generated on domain creation
 configPath uuid = "/tmp/xenmgr-xl-" ++ show uuid
 stubConfigPath uuid = "/tmp/xenmgr-xl-" ++ show uuid ++ "-dm"
 
+--Check the domain state to see if the domain is running
 isRunning :: (MonadRpc e m) => Uuid -> m Bool
 isRunning uuid = (not . (`elem` [Shutdown, Rebooted])) `fmap` (liftIO $ state uuid)
 
+--Xl will write any state updates to the xenstore node "/state/<uuid>/state"
+--It's up to xenmgr to setup and maintain a watch on this node to detect state changes
 state :: Uuid -> IO VmState
 state uuid = 
     do
@@ -373,7 +370,8 @@ state uuid =
                           return $ stateFromStr state
           Nothing    -> return $ stateFromStr "shutdown"
 
-
+--Wait for provided duration for the domain to reach a specific state,
+--returning false if that never happens.
 waitForState :: Uuid -> VmState -> Maybe Int -> IO Bool
 waitForState uuid expected timeout = do
     s <- state uuid
