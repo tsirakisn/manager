@@ -272,6 +272,7 @@ whenShutdown xm reason = do
       Just domid -> do
         usbDown domid
         removeAlsa domid
+        cleanupV4VDevice domid
       _ -> return ()
     liftIO $ removeVmEnvIso uuid
     uuidRpc disconnectFrontVifs

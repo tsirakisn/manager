@@ -115,6 +115,7 @@ module Vm.Actions
           , setVmNestedHvm
           , setVmSerial
           , setVmAutolockCdDrives
+          , cleanupV4VDevice
           , EventHookFailMode(..)
           ) where
 
@@ -733,6 +734,9 @@ setupV4VDevice uuid =
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/frontend-id") $ show domid
     xsWrite (xsp_dom0 ++ (v4vBack domid) ++ "/state") "0"
 
+cleanupV4VDevice domid = liftIO $ do
+    xsRm (xsp_dom0 ++ "/backend/v4v/" ++ show domid)
+    
 --Watch acpi state when booting a VM, used to be handled in xenvm
 monitorAcpi :: Uuid -> VmMonitor -> AcpiState -> IO ()
 monitorAcpi uuid m state = do
