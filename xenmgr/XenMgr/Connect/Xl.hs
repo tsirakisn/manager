@@ -47,6 +47,7 @@ module XenMgr.Connect.Xl
     , setNicBackendDom
     , connectVif
     , changeNicNetwork
+    , wakeIfS3
     ) where
 
 import Control.Exception as E
@@ -276,6 +277,15 @@ connectVif uuid nicid connect = do
   where
     value | connect == True         = "0"
           | otherwise               = "1"
+
+-- Check if domain is in S3, if so, wake it up
+wakeIfS3 :: Uuid -> IO ()
+wakeIfS3 uuid = do
+    acpi_state <- acpiState uuid
+    case acpi_state of
+        3 -> do resumeFromSleep uuid
+                return ()
+        _ -> return ()
 
 --Adjust memory through the balloon driver, unreliable, requires correct
 --paravirt drivers.  Implemented here in the event ballooning is ever desired
