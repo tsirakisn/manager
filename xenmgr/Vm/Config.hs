@@ -537,7 +537,6 @@ getXlConfig :: VmConfig -> Rpc XlConfig
 getXlConfig cfg =
     fmap (XlConfig . concat) . mapM (force <=< future) $
     [prelude, diskSpecs cfg, nicSpecs cfg, pciSpecs cfg
-    , extraHvmSpecs uuid
     , miscSpecs cfg]
   where
     uuid = vmcfgUuid cfg
@@ -677,13 +676,6 @@ pciSpecs cfg = do
                (pciFunc   addr)
        where addr = devAddr d
 
--- Extra HVM parameters from database
-extraHvmSpecs :: Uuid -> Rpc [Param]
-extraHvmSpecs uuid =
-    do
-        prop <- readConfigPropertyDef uuid vmExtraHvms []
-        return $ ["device_model_args=[" ++ (concat (intersperse "," prop)) ++ "]"]
-
 cpuidResponses :: VmConfig -> [String]
 cpuidResponses cfg = map option (vmcfgCpuidResponses cfg) where
     option (CpuidResponse r) = printf "cpuid=%s" r
@@ -697,7 +689,7 @@ wrapBrackets :: String -> String
 wrapBrackets = (++"]") <$> ("["++)
 
 --helper function to combine all extra_hvm args into one 'extra_hvm' entry
-combineExtraHvmParams hvmStuff = ["extra_hvm=[" ++ concat (intersperse "," (map wrapQuotes hvmStuff)) ++ "]"]
+combineExtraHvmParams hvmStuff = ["device_model_args=[" ++ concat (intersperse "," (map wrapQuotes hvmStuff)) ++ "]"]
 
 -- Additional misc stuff in xenvm config
 miscSpecs :: VmConfig -> Rpc [Param]
@@ -738,10 +730,11 @@ miscSpecs cfg = do
     timer_mode_ <- timer_mode
     nested_ <- nested
     dm_override_ <- liftRpc dm_override
+    extra_hvms <- readConfigPropertyDef uuid vmExtraHvms []
 
     let coresPSpms = if coresPS > 1 then ["cores-per-socket=" ++ show coresPS] else ["cores-per-socket=" ++ show vcpus]
     return $
-           t ++ v ++ combineExtraHvmParams (cdromParams ++ audioRec)
+           t ++ v ++ combineExtraHvmParams (cdromParams ++ audioRec ++ extra_hvms)
         ++ ["memory="++show (vmcfgMemoryMib cfg) ]
         ++ ["maxmem="++show (vmcfgMemoryStaticMaxMib cfg) ]
         ++ smbios_path ++ snd -- ++ coresPSpms --disable and CoresPS for now
