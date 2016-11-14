@@ -30,6 +30,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.IORef
 import Data.String
+import Data.Int
 import System.IO
 import Text.Printf (printf)
 import Tools.Log
@@ -268,6 +269,11 @@ whenRunning xm = do
     usb <- uuidRpc getVmUsbEnabled
     when usb $ whenDomainID_ uuid $ \domid -> usbUp (fromIntegral domid)
 
+cleanupVkbd :: Uuid -> DomainID -> Rpc ()
+cleanupVkbd uuid domid = do
+    rpcCallOnce (Xl.xlInputDbus uuid "detach_vkbd" [toVariant $ (read (show domid) :: Int32) ])
+    return ()
+
 whenShutdown xm reason = do
     uuid <- vmUuid
     info ("vm " ++ show uuid ++ " shutdown, reason: " ++ show reason)
@@ -277,6 +283,8 @@ whenShutdown xm reason = do
         usbDown domid
         removeAlsa domid
         cleanupV4VDevice domid
+        vkb_enabled <- getVmVkb uuid
+        when vkb_enabled $ liftRpc $ cleanupVkbd uuid domid
       _ -> return ()
     liftIO $ removeVmEnvIso uuid
     uuidRpc disconnectFrontVifs
@@ -302,6 +310,12 @@ whenRebooted xm = do
     uuid <- vmUuid
     uuidRpc unapplyVmFirewallRules
     liftIO $ removeVmEnvIso uuid
+    domidStr <- liftIO $ xsRead ("/xenmgr/vms/" ++ show uuid ++ "/domid")
+    case join (fmap maybeRead domidStr) of
+      Just domid -> do
+        vkb_enabled <- getVmVkb uuid
+        when vkb_enabled $ liftRpc $ cleanupVkbd uuid domid
+      _ -> return ()
     uuidRpc (backgroundRpc . runXM xm . startVm)
   where
     backgroundRpc f =
