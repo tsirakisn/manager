@@ -714,9 +714,9 @@ miscSpecs cfg = do
               -- no cdrom
               (False, _)    -> ""
               -- full access to cdrom
-              (True, True)  -> printf "file=%s:%s,media=cdrom,if=atapi-pt,format=raw,readonly=%s" atapiType bsg_str "off"
+              (True, True)  -> printf "file=%s:%s,media=cdrom,if=atapi-pt,format=atapi-pt-fmt,readonly=%s" atapiType bsg_str "off"
               -- readonly access to cdrom
-              (True, False) -> printf "file=%s:%s,media=cdrom,if=atapi-pt,format=raw,readonly=%s" atapiType bsg_str "on"
+              (True, False) -> printf "file=%s:%s,media=cdrom,if=atapi-pt,format=atapi-pt-fmt,readonly=%s" atapiType bsg_str "on"
         atapiType = if (vmcfgStubdom cfg) then "atapi-pt-v4v" else "atapi-pt-local"
 
     let empty = pure []
