@@ -188,10 +188,8 @@ start uuid =
       state <- state uuid
       case state of
         Shutdown -> do
-                      exitCode <- system ("xl create " ++ configPath uuid ++ " -p")
-                      case exitCode of
-                        ExitSuccess -> return ()
-                        _           -> error "error creating domain"
+                      _ <- runCommand ("xl create " ++ configPath uuid ++ " -p")
+                      return ()
         _        -> do return ()
 
 destroy :: Uuid -> IO ()
