@@ -861,6 +861,8 @@ bootVm config
           stubdom_memory <- getVmStubdomMemory uuid
           stubdom_cmdline <- getVmStubdomCmdline uuid
           applyVmFirewallRules uuid
+          whenDomainID_ uuid $ \domid -> do
+            liftIO $ xsWrite (domainXSPath domid ++ "/v4v-firewall-ready") "1"
 
         waitForVmInternalState uuid Created 30
         -- BEFORE DEVICE MODEL
