@@ -667,7 +667,7 @@ pciSpecs cfg = do
     let devices = vmcfgPciPtDevices cfg
         uuid    = vmcfgUuid cfg
 
-    return $ ["pci=[" ++ (concat (intersperse "," (map (\dev -> "'" ++ stringAddr dev ++ "'") devices))) ++ "]"]
+    return $ ["pci=[" ++ (concat (intersperse "," (map (\dev -> "'" ++ stringAddr dev ++ ",permissive=1" ++ "'") devices))) ++ "]"]
  where
    stringAddr (PciPtDev d _ _ _) =
            printf "%04x:%02x:%02x.%x"
