@@ -27,7 +27,7 @@ Executable xec
   if flag(static)
     GHC-Options: -O2 -Werror -fwarn-incomplete-patterns
   else
-    GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -dynamic
+    GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -dynamic -dynload deploy
 
 Executable xec-vm
   Build-Depends:
@@ -40,4 +40,4 @@ Executable xec-vm
   if flag(static)
     GHC-Options: -O2 -Werror -fwarn-incomplete-patterns
   else
-    GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -dynamic
+    GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -dynamic -dynload deploy 
