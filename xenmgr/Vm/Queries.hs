@@ -40,6 +40,7 @@ module Vm.Queries
                , getVmWiredNics
                , getVmWirelessNics
                , getVmNicMacActual
+               , getVmNicBackendUuid
                , getVmDiskEncryptionKeySet
                , getVmDiskVirtualSizeMB
                , getVmDiskPhysicalUtilizationBytes

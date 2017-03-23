@@ -24,7 +24,10 @@ module XenMgr.Connect.NetworkDaemon
     , anyNetworksActive
     , onNetworkAdded, onNetworkRemoved, onNetworkStateChanged, onNetworkStateChangedRemove
     , getNetworkBackend'
+    , vifConnected
     , netbackToUuid
+    , repeatUntil
+    , ready
     ) where
 
 import Data.Time
@@ -62,6 +65,9 @@ npathS = TL.unpack . strObjectPath . networkObjectPath
 
 ready :: Rpc Bool
 ready = comCitrixXenclientNetworkdaemonIsInitialized service rootS
+
+vifConnected :: DomainID -> NicID -> DomainID -> Rpc Bool
+vifConnected frontdomid nicid backdomid = comCitrixXenclientNetworkdaemonVifConnected service rootS (vifS frontdomid nicid) backdomid
 
 repeatUntil :: (MonadIO m) => m Bool -> Float -> Float -> m Bool
 repeatUntil pred delay to

@@ -21,7 +21,8 @@ module Vm.Utility ( withMountedDisk, copyFileFromDisk
                   , tapCreateVhd
                   , tapDestroy
                   , PartitionNum
-                  , manageFrontVifs) where
+                  , manageFrontVifs
+                  , hookupNetwork) where
 
 import qualified Control.Exception as E
 import Control.Applicative
@@ -140,6 +141,38 @@ copyFileFromDisk extraEnv diskT ro phys_path (part,src_path) dst_path
   = withMountedDisk extraEnv diskT ro phys_path part $ \contents ->
       void $ readProcessOrDie "cp" [contents </> deslash src_path, dst_path] ""
 
+hookupNetwork :: Uuid -> Rpc ()
+hookupNetwork back_uuid = 
+    do
+      info $ "ndvm up, hooking up network for existing vms"
+      vms <- filter ((/=) back_uuid) <$> (filterM Xl.isRunning =<< getVms)
+      nics <- mapM getnics vms
+      info $ "nics = " ++ (show nics)
+      filteredNics <- filterM (isback back_uuid) (concat nics)
+      info $ "filterednics = " ++ (show filteredNics)
+      mapM_ (hookup back_uuid) filteredNics
+
+    where
+      getnics :: Uuid -> Rpc [(Uuid, NicID)]
+      getnics uuid = do
+        ids <- getNicIds uuid
+        return $ zip (repeat uuid) ids
+      isback back_uuid (uuid, nicid) = do
+        nic <- getNic uuid nicid
+        case nic of
+            Nothing     -> return False
+            Just nicDef -> do
+                             maybe_uuid <- getVmNicBackendUuid nicDef
+                             case maybe_uuid of
+                                Nothing -> return False
+                                Just nic_uuid -> return $ back_uuid == nic_uuid
+      hookup back_uuid (uuid, nicid) = do
+        nic <- getNic uuid nicid
+        info $ "hookup, nic = " ++ (show nic)
+        case nic of
+            Nothing     -> return ()
+            Just nicDef -> liftIO $ Xl.addVif back_uuid uuid nicDef
+    
 manageFrontVifs :: Bool -> Uuid -> Rpc ()
 manageFrontVifs connect_action back_uuid =
     do
@@ -157,7 +190,7 @@ manageFrontVifs connect_action back_uuid =
         return $ zip (repeat uuid) (vifs ++ vwifs)
       uses bkuuid (_,d) = do 
             domid <- liftIO $ Xl.getDomainId bkuuid
-            return $ (read domid :: DomainID) == dmfBackDomid d
+            if domid /= "" then return $ (read domid :: DomainID) == dmfBackDomid d else return False
       manage connect_action (front_uuid, dev) = do
           let nid@(XbDeviceID nic_id) = dmfID dev
           liftIO $ Xl.connectVif front_uuid nid connect_action

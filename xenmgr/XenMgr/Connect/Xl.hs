@@ -25,6 +25,7 @@ module XenMgr.Connect.Xl
     , hibernate
     , suspendToFile
     , resumeFromFile
+    , addVif
     , changeCd
     , setMemTarget
     , acpiState
@@ -45,6 +46,7 @@ module XenMgr.Connect.Xl
     , xlSurfmanDbus
     , xlInputDbus
     , setNicBackendDom
+    , removeNic 
     , connectVif
     , changeNicNetwork
     , wakeIfS3
@@ -59,9 +61,12 @@ import Data.String
 import Data.List as L
 import Data.Typeable
 import Data.Text as T
+import Data.Maybe
 import Vm.Types
 import Vm.DmTypes
 import Vm.State
+import Vm.Config
+import Text.Printf
 import Tools.Misc as TM
 import Tools.XenStore
 import Tools.Log
@@ -73,6 +78,7 @@ import System.IO
 import XenMgr.Rpc
 import XenMgr.Db
 import XenMgr.Errors
+import XenMgr.Connect.NetworkDaemon
 import qualified Data.Map as M
 
 type NotifyHandler = [String] -> Rpc ()
@@ -250,6 +256,19 @@ resumeFromFile uuid file delete paused =
       _ <- system ("xl restore " ++ p ++ file)
       if delete then removeFile file else return ()
 
+
+addVif :: Uuid -> Uuid -> NicDef -> IO ()
+addVif back_uuid uuid nicObj = 
+    do
+      info $ "Xl.AddVif for domain " ++ (show uuid) ++ " with backend " ++ (show back_uuid)
+      domid <- getDomainId uuid
+      back_domid <- getDomainId back_uuid
+      let mac = fromMaybe "" (nicdefMac nicObj)
+      let bridge = nicdefNetwork nicObj
+      let wireless = nicdefWirelessDriver nicObj
+      exitCode <- system (printf "xl network-attach %s type=ioemu mac=%s bridge=%s backend=%s wireless=%s" domid mac (show bridge) back_domid (show wireless))
+      bailIfError exitCode "Error adding vif to domain."
+
 --Ask xl directly for the domid
 getDomainId :: Uuid -> IO String
 getDomainId uuid = do
@@ -320,14 +339,25 @@ setMemTarget uuid mbs = do
     exitCode <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
     bailIfError exitCode "Error setting mem target."
 
+removeNic :: Uuid -> NicID -> DomainID -> IO ()
+removeNic uuid nic back_domid = do
+    domid <- getDomainId uuid
+    system ("xl network-detach " ++ domid ++ " " ++ show nic)
+    return ()
+    
+
 --Given the uuid of a domain and a nic id, set the target backend domid for that nic
 setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
 setNicBackendDom uuid nic back_domid = do
     domid    <- getDomainId uuid
-    exitCode <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
-    bailIfError exitCode "Error detatching nic from domain."
-    exitCode <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
+    info $ "Network detach for domid: " ++ domid ++ " nic: " ++ show nic
+    --exitCode <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
+    (_, _, _) <- readProcessWithExitCode "xl" ["network-detach", domid, show nic] []
+    --Comment this out for now, until jed fixes network-detatch
+    --bailIfError exitCode "Error detatching nic from domain."
+    exitCode <- system ("xl network-attach " ++ domid ++ " backend=" ++ show back_domid)
     bailIfError exitCode "Error attaching new nic to domain."
+                    
 
 --Implement signal watcher to fire off handler upon receiving
 --notify message over dbus
