@@ -25,6 +25,7 @@ module XenMgr.Connect.Xl
     , hibernate
     , suspendToFile
     , resumeFromFile
+    , addVif
     , changeCd
     , setMemTarget
     , acpiState
@@ -59,9 +60,11 @@ import Data.String
 import Data.List as L
 import Data.Typeable
 import Data.Text as T
+import Data.Maybe
 import Vm.Types
 import Vm.DmTypes
 import Vm.State
+import Text.Printf
 import Tools.Misc as TM
 import Tools.XenStore
 import Tools.Log
@@ -249,6 +252,19 @@ resumeFromFile uuid file delete paused =
       let p = if paused then "-p" else ""
       _ <- system ("xl restore " ++ p ++ file)
       if delete then removeFile file else return ()
+
+
+addVif :: Uuid -> Uuid -> NicDef -> IO ()
+addVif back_uuid uuid nicObj = 
+    do
+      info $ "Xl.AddVif for domain " ++ (show uuid) ++ " with backend " ++ (show back_uuid)
+      domid <- getDomainId uuid
+      back_domid <- getDomainId back_uuid
+      let mac = fromMaybe "" (nicdefMac nicObj)
+      let bridge = nicdefNetwork nicObj
+      let wireless = nicdefWirelessDriver nicObj
+      exitCode <- system (printf "xl network-attach %s type=ioemu mac=%s bridge=%s backend=%s wireless=%s" domid mac (show bridge) back_domid (show wireless))
+      bailIfError exitCode "Error adding vif to domain."
 
 --Ask xl directly for the domid
 getDomainId :: Uuid -> IO String
