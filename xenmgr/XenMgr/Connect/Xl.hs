@@ -45,6 +45,7 @@ module XenMgr.Connect.Xl
     , xlSurfmanDbus
     , xlInputDbus
     , setNicBackendDom
+    , removeNic
     , connectVif
     , changeNicNetwork
     , wakeIfS3
@@ -73,6 +74,7 @@ import System.IO
 import XenMgr.Rpc
 import XenMgr.Db
 import XenMgr.Errors
+import XenMgr.Connect.NetworkDaemon
 import qualified Data.Map as M
 
 type NotifyHandler = [String] -> Rpc ()
@@ -320,13 +322,19 @@ setMemTarget uuid mbs = do
     exitCode <- system ("xl mem-set " ++ domid ++ " " ++ show mbs ++ "m")
     bailIfError exitCode "Error setting mem target."
 
+removeNic :: Uuid -> NicID -> DomainID -> IO ()
+removeNic uuid nic back_domid = do
+    domid <- getDomainId uuid
+    system ("xl network-detach " ++ domid ++ " " ++ show nic)
+    return ()
+
 --Given the uuid of a domain and a nic id, set the target backend domid for that nic
 setNicBackendDom :: Uuid -> NicID -> DomainID -> IO ()
 setNicBackendDom uuid nic back_domid = do
     domid    <- getDomainId uuid
     exitCode <- system ("xl network-detach " ++ show domid ++ " " ++ show nic)
     bailIfError exitCode "Error detatching nic from domain."
-    exitCode <- system ("xl network-attach " ++ show domid ++ " backend=" ++ show back_domid)
+    exitCode <- system ("xl network-attach " ++ domid ++ " backend=" ++ show back_domid)
     bailIfError exitCode "Error attaching new nic to domain."
 
 --Implement signal watcher to fire off handler upon receiving
