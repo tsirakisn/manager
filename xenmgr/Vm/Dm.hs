@@ -157,7 +157,9 @@ moveBackend t frontdomid id backdomid = do
       -- Try to hook up the vif to the backend, retrying for specified timeout in seconds
       -- Rpc calls are also wrapped in their own retry block in case dbus isn't ready in the ndvm
       vifConnect uuid id nicNet frontdomid backdomid timeout =
-          do rpcRetry (ND.joinNetwork (networkFromStr nicNet) frontdomid id)
+          do info $ printf "joinNetwork: domid:%s devid:%s" (show frontdomid) (show id)
+             --rpcRetry (ND.joinNetwork (networkFromStr nicNet) frontdomid id)
+             liftIO $ Xl.addNic uuid id nicNet backdomid
              connected <- rpcRetry (ND.vifConnected frontdomid id backdomid)
              case (connected, timeout > 0) of
                 (True, _)        -> return ()
