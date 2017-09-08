@@ -160,14 +160,17 @@ domainXsPath uuid = do
 --The following functions are all domain lifecycle operations, and self-explanatory
 
 reboot :: Uuid -> IO ()
-reboot uuid =
-    do
-      domid <- getDomainId uuid
-      exitCode <- system ("xl reboot " ++ domid)
-      case exitCode of
-        ExitSuccess   -> return ()
-        _             -> do _ <- system ("xl reboot -F " ++ domid)
-                            return ()
+reboot uuid = do
+    state <- state uuid
+    if not $ elem state [Shutdown, Rebooted, StartingDependencies] then
+      do
+        domid <- getDomainId uuid
+        exitCode <- system ("xl reboot " ++ domid)
+        case exitCode of
+          ExitSuccess   -> return ()
+          _             -> do _ <- system ("xl reboot -F " ++ domid)
+                              return ()
+      else throw $ XlException "Domain isn't running."
 
 shutdown :: Uuid -> IO ()
 shutdown uuid =
