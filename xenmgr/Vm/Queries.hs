@@ -132,6 +132,7 @@ import Data.List
 import Data.Maybe
 import Data.Ord
 import Data.Word
+import qualified Data.Hash.MD5 as MD
 import qualified Data.Map as M
 import qualified Data.ByteString as B
 import Control.Arrow
@@ -848,13 +849,13 @@ generatedVmNicMac uuid nicid
     unicast_local (x:xs) = (0x2 .|. (x .&. 0xFE)) : xs
     halfbytes []         = []
     halfbytes (x:xs)     = (x .&. 0xF0) `shiftR` 4 : (x .&. 0x0F) : halfbytes xs
-    hdigest              = halfbytes (md5 base)
+    hdigest              = halfbytes (md5 $ MD.Str base)
     base                 = show nicid ++ " " ++ show uuid
 
 -- yeah yeah we should do it using haskell lib, i know..
-md5 :: String -> [Word8]
+md5 :: MD.MD5 a => a -> [Word8]
 md5 x
-  = parse . head . words . unsafePerformIO $ readProcessOrDie "md5sum" [] x
+  = parse $ MD.md5s x
   where
     parse (a:b:xs) = byte a b : parse xs
     parse _ = []

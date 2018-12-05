@@ -50,9 +50,9 @@ notifyLicenseChanged :: (MonadRpc e m) => m ()
 notifyLicenseChanged =
   notifyComCitrixXenclientXenmgrHostLicenseChanged (fromString "/host")
 
-configChangedTasks :: MVar (Map Uuid ScheduledTask)
-{-# NOINLINE configChangedTasks #-}
-configChangedTasks = unsafePerformIO (newMVar Map.empty)
+--configChangedTasks :: MVar (Map Uuid ScheduledTask)
+--{-# NOINLINE configChangedTasks #-}
+--configChangedTasks = unsafePerformIO (newMVar Map.empty)
 
 -- creates new notification task or reschedules currently pending task into future. Used to
 -- throttle spammy notifications
@@ -72,8 +72,8 @@ updateKeyedNotifyTask throttle key amap action = do
            void $ rpc ctx action
 
 notifyVmConfigChanged :: (MonadRpc e m) => Uuid -> m ()
-notifyVmConfigChanged uuid = do
-  updateKeyedNotifyTask 0.5 uuid configChangedTasks $
+notifyVmConfigChanged uuid =
+--  updateKeyedNotifyTask 0.5 uuid configChangedTasks $
       notifyComCitrixXenclientXenmgrVmConfigChanged xenmgrObjectPath (show uuid) (vmObjPath uuid)
 
 notifyVmNameChanged :: (MonadRpc e m) => Uuid -> m ()

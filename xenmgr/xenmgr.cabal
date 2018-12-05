@@ -26,6 +26,7 @@ Executable xenmgr
     json,
     regex-posix,
     hsyslog,
+    MissingH,
     zlib,
     xch-rpc,
     xchutils,
@@ -35,4 +36,4 @@ Executable xenmgr
     xenmgr-core
 
   Main-Is: Main.hs
-  GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -threaded -dynamic -debug
+  GHC-Options: -O2 -Werror -fwarn-incomplete-patterns -dynamic -debug

@@ -330,29 +330,27 @@ appGetAutolockCdDrives = dbReadWithDefault True "/xenmgr/autolock-cd-drives"
 appSetAutolockCdDrives :: Bool -> Rpc ()
 appSetAutolockCdDrives v = dbWrite "/xenmgr/autolock-cd-drives" v
 
-capsCache :: MVar (Maybe (M.Map String String))
-{-# NOINLINE capsCache #-}
-capsCache = unsafePerformIO $ newMVar Nothing
+--capsCache :: MVar (Maybe (M.Map String String))
+--{-# NOINLINE capsCache #-}
+--capsCache = unsafePerformIO $ newMVar Nothing
 
 readCaps :: IO (M.Map String String)
-readCaps = modifyMVar capsCache get where
-  get v@(Just m) = return (v,m)
-  get Nothing = do
+readCaps = do
     flavour <- appGetPlatformFlavour
     v <- parse <$> readFile ("/etc/caps." ++ flavour)
-    return (Just v, v)
-
-  parse contents = foldl' mk_map M.empty . catMaybes . map parse_line $ lines contents
-  parse_line l =
-        case split '=' l of
-          [ left, right ] -> from_equals left right
-          _ -> Nothing
-  from_equals l r =
-    let ( l', r' ) = ( strip l, strip r ) in
-    Just (l', r')
-  mk_map m (key,val) =  M.insert key_l val_l m
-    where key_l = map toLower key
-          val_l = map toLower val
+    return v
+  where
+    parse contents = foldl' mk_map M.empty . catMaybes . map parse_line $ lines contents
+    parse_line l =
+          case split '=' l of
+            [ left, right ] -> from_equals left right
+            _ -> Nothing
+    from_equals l r =
+      let ( l', r' ) = ( strip l, strip r ) in
+      Just (l', r')
+    mk_map m (key,val) =  M.insert key_l val_l m
+      where key_l = map toLower key
+            val_l = map toLower val
 
 readDictFile :: FilePath -> IO [(String,String)]
 readDictFile path =
