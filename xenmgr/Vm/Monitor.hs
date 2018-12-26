@@ -238,9 +238,11 @@ newVmWatch path f =
 killVmWatch :: VmWatch -> IO ()
 killVmWatch (VmWatch _ _ active quit threadID) =
     do active' <- takeMVar active
+       info $ "killing vm watch"
        when active' $ do
          modifyMVar_ quit $ \_ -> return True
          id <- takeMVar threadID
+         info $ "killing thread: " ++ show id
          killThread id
        putMVar active False
 
