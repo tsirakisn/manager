@@ -493,9 +493,9 @@ pciGetMemHoleBase size =
     -- and get the first base low enough to accomodate for the cumulated size.
     head [ b | b <- bases, (pciHoleLimit - b) > size ]
 
---pciCache :: MVar PciCache
---{-# NOINLINE pciCache #-}
---pciCache = unsafePerformIO (newMVar =<< initCache)
+pciCache :: MVar PciCache
+{-# NOINLINE pciCache #-}
+pciCache = unsafePerformIO (newMVar =<< initCache)
 
 readPciCache :: IO PciCache
-readPciCache = initCache
+readPciCache = readMVar pciCache

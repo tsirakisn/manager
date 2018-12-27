@@ -587,18 +587,19 @@ getSurfmanGpu = do
                             _   -> return False
                 else return False
 
---hostGpus :: MVar (Maybe [HostGpu])
---{-# NOINLINE hostGpus #-}
---hostGpus = unsafePerformIO (newMVar Nothing)
+hostGpus :: MVar (Maybe [HostGpu])
+{-# NOINLINE hostGpus #-}
+hostGpus = unsafePerformIO (newMVar Nothing)
 
 getHostGpus :: Rpc [HostGpu]
 getHostGpus =
   do c <- rpcGetContext
-     liftIO $ f c
+     liftIO $ modifyMVar hostGpus (f c)
   where
-    f c = handle =<< rpc c getHostGpus'
+    f c v@(Just gpus) = return (v, gpus)
+    f c Nothing = handle =<< rpc c getHostGpus'
       where handle (Left ex)    = E.throw ex
-            handle (Right gpus) = return $ gpus
+            handle (Right gpus) = return (Just gpus, gpus)
 
 getHostGpus' :: Rpc [HostGpu]
 getHostGpus' = do

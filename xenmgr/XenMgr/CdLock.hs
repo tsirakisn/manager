@@ -187,12 +187,13 @@ findBlockDevice scsi =
     get [] = Nothing
     get (x:_) = Just ("/dev" </> takeBaseName x)
   
---cdAssignChangedTasks :: MVar (Map BSGDevice ScheduledTask)
---{-# NOINLINE cdAssignChangedTasks #-}
---cdAssignChangedTasks = unsafePerformIO (newMVar Map.empty)
+cdAssignChangedTasks :: MVar (Map BSGDevice ScheduledTask)
+{-# NOINLINE cdAssignChangedTasks #-}
+cdAssignChangedTasks = unsafePerformIO (newMVar Map.empty)
 
-notifyCdDeviceAssignmentChanged :: BSGDevice -> Rpc ()
-notifyCdDeviceAssignmentChanged dev =
+notifyCdDeviceAssignmentChanged :: (MonadRpc e m) => BSGDevice -> m ()
+notifyCdDeviceAssignmentChanged dev = do
+  updateKeyedNotifyTask 1.0 dev cdAssignChangedTasks $ do
     action =<< getCdDeviceVms dev
   where
     action [] =
