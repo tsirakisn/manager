@@ -632,9 +632,9 @@ implementationFor xm uuid = self where
   --, comCitrixXenclientXenmgrVmUnrestrictedSetSerial = setVmSerial uuid
 
   , comCitrixXenclientXenmgrVmGetBios = getVmBios uuid
-  --, comCitrixXenclientXenmgrVmUnrestrictedGetBios = getVmBios uuid
+  , comCitrixXenclientXenmgrVmUnrestrictedGetBios = getVmBios uuid
   , comCitrixXenclientXenmgrVmSetBios = restrict' $ setVmBios uuid
-  --, comCitrixXenclientXenmgrVmUnrestrictedSetBios = setVmBios uuid
+  , comCitrixXenclientXenmgrVmUnrestrictedSetBios = setVmBios uuid
 
   } where
     stom "" = Nothing
