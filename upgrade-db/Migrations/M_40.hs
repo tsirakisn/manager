@@ -33,8 +33,11 @@ migration = Migration {
 
 act :: IO ()
 act = do
-  updateV4VToArgo
+  updateV4VFirewallToArgo
+  updateConfigV4VToArgo
 
-updateV4VToArgo = xformVmJSON xform where
-  xform tree = jsMv "/v4v-firewall-rules" "/argo-firewall-rules" .
-               jsMv "/config/v4v" "/config/argo"
+updateV4VFirewallToArgo = xformVmJSON xform where
+  xform tree = jsMv "/v4v-firewall-rules" "/argo-firewall-rules" tree
+
+updateConfigV4VToArgo = xformVmJSON xform where
+  xform tree = jsMv "/config/v4v" "/config/argo" tree
