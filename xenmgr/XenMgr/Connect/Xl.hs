@@ -242,9 +242,13 @@ start uuid =
         then do
           case state of
             Shutdown -> do
+                          info $ "VM STARTING, DELAYING"
+                          threadDelay 5000000
                           (_, _, Just err, handle) <- createProcess (proc "xl" ["create", configPath uuid, "-p"]){std_err = CreatePipe,
                                   close_fds = True}
                           ec <- waitForProcess handle
+                          info $ "VM STARTED"
+                          threadDelay 5000000
                           stderr <- hGetContents err
                           case ec of
                             ExitSuccess -> return ()

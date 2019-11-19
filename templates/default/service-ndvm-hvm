@@ -11,7 +11,7 @@
   "provides-default-network-backend": "true",
   "shutdown-priority": "-15",
   "hidden-in-ui": "false",
-  "measured": "true",
+  "measured": "false",
   "s3-mode": "restart",
   "domstore-read-access": "true",
   "domstore-write-access": "true",

@@ -10,7 +10,7 @@
   "shutdown-priority": "-5",
   "start-from-suspend-image": "",
   "hidden-in-ui": "true",
-  "measured": "true",
+  "measured": "false",
   "icbinn-path": "\/config\/certs",
   "argo-firewall-rules": {
     "0": "myself -> 0:80",
